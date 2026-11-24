@@ -1,0 +1,13 @@
+# Python environment
+.venv/
+__pycache__/
+*.pyc
+
+# Temporary extraction scratch directory
+.scratch/
+
+# Raw and processed datasets (never commit large binary assets)
+residential_mortgage/00_data/raw/
+residential_mortgage/00_data/processed/
+*.duckdb*
+*.parquet
