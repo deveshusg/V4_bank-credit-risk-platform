@@ -1,0 +1,15 @@
+item,value
+run_date_time,2026-11-15 21:00
+database_file,mortgages.duckdb
+database_size_mb,"2,215.4"
+database_modified,2026-11-15 19:07
+loaded_quarters_first,2000Q1
+loaded_quarters_last,2025Q4
+loaded_quarters_count,104
+sample_run,no
+threads,DuckDB default
+python,3.12.10
+duckdb,2.0.0
+pandas,3.1.1
+matplotlib,3.11.2
+numpy,2.5.4

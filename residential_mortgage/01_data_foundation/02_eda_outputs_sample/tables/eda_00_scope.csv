@@ -1,0 +1,10 @@
+item,value
+loaded quarters,2000Q1 to 2025Q4 (104 quarters)
+run scope,10% sample run
+loans in scope,"5,759,759"
+loans in loaded_quarters_table,"57,597,528"
+monthly rows in scope,"331,458,356"
+monthly rows in loaded_quarters_table,"3,314,483,004"
+original balance in scope,"1,262,937,321,000.00"
+original balance in loaded_quarters_table,"12,629,831,311,000.00"
+first and last reporting month,2000-01 to 2025-12

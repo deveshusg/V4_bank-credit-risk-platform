@@ -1,0 +1,10 @@
+code,reason,loans,pct_of_exits
+01,prepaid or matured,4124934,97.80813790954701
+02,third-party sale,7002,0.1660275247174011
+03,short sale,10803,0.25615472001172296
+06,repurchased,9773,0.23173193359942315
+09,deed-in-lieu or REO,45563,1.080364482819044
+15,non-performing note sale,4649,0.11023449905901138
+16,reperforming note sale,14649,0.34734893024638797
+96,removal (non-credit),0,0.0
+other,other codes,0,0.0

@@ -1,0 +1,3 @@
+group,loans,median_credit_score,median_ltv,median_dti
+kept (outcome population),5554391,759.0,75.0,34.0
+left out (all steps),205368,770.0,80.0,39.0

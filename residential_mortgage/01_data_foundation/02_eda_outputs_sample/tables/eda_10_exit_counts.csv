@@ -1,0 +1,7 @@
+item,exits
+"credit exit rows (codes 02, 03, 09, 15)",68017
+left out: REO (09) with no disposition date,658
+left out: end date in the last 6 months of the data (or no end date),357
+left out: balance at removal blank or zero,0
+kept out of severity: every proceeds field blank,89
+exits used for severity,66913

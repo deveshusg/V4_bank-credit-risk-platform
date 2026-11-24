@@ -1,0 +1,79 @@
+field_name,source_object,data_type,description,rows_checked,fill_rate,measured_on
+loan_id,loan_monthly_view,VARCHAR,Loan identifier. Joins the tables; not a feature.,3314483004,1.0,all loans
+reporting_period,loan_monthly_view,DATE,Month of the record. Orders time; every lag is counted from it.,3314483004,1.0,all loans
+servicer_name,loan_monthly_view,VARCHAR,"Servicer at the reporting date. A change of servicer can follow arrears, so use month t-1.",3314483004,0.9776297096981584,all loans
+current_rate,loan_monthly_view,"DECIMAL(6,3)",Interest rate at the reporting date. Changes on modification.,3314483004,0.9872904118231526,all loans
+current_upb,loan_monthly_view,"DECIMAL(12,2)","Balance at the reporting date. Set to zero in the exit month and masked in the first six months, so use month t-1.",3314483004,0.9999999722430316,all loans
+loan_age,loan_monthly_view,INTEGER,Months since origination at the reporting date.,3314483004,0.9872775175045068,all loans
+months_to_legal_maturity,loan_monthly_view,INTEGER,Months left to legal maturity at the reporting date.,3314483004,0.9872255537443088,all loans
+months_to_maturity,loan_monthly_view,INTEGER,"Months left to maturity at the reporting date, after prepayments.",3314483004,0.9725265998075397,all loans
+maturity_date,loan_monthly_view,DATE,Maturity date at the reporting date. Changes on modification.,3314483004,0.9872255534426025,all loans
+months_to_amortization,loan_monthly_view,INTEGER,Months left before an interest-only loan starts to repay principal.,3314483004,0.0,all loans
+delinquency_status,loan_monthly_view,VARCHAR,"Months in arrears at the reporting date. The month t value is the default target, so models use month t-1.",3314483004,1.0,all loans
+payment_history,loan_monthly_view,VARCHAR,"24-month payment record up to the reporting date. Blank once the loan leaves the pool, so use month t-1.",3314483004,0.31904267504881734,all loans
+modification_flag,loan_monthly_view,VARCHAR,Loan modified at or before the reporting date.,3314483004,0.9872888529073296,all loans
+zero_balance_code,loan_monthly_view,VARCHAR,Why the loan left the pool. Outcome; filled only in the exit month.,3314483004,0.012722482495493286,all loans
+zero_balance_date,loan_monthly_view,DATE,Date the loan left the pool. Outcome.,3314483004,0.012722482495493286,all loans
+upb_at_removal,loan_monthly_view,"DECIMAL(12,2)",Balance when the loan left the pool. Outcome.,3314483004,0.012722011230442865,all loans
+total_principal,loan_monthly_view,"DECIMAL(12,2)","Principal paid in the month. In the month a loan pays off it equals the whole balance, so use month t-1.",3314483004,0.3143876259864508,all loans
+last_paid_date,loan_monthly_view,DATE,"Last paid instalment date. Filled only for loans that exit with code 02, 03, 09 or 15 (Fannie Mae FAQ Q55; 0 live rows in the test data). Outcome.",3314483004,0.0002042421093072529,all loans
+foreclosure_date,loan_monthly_view,DATE,Date of foreclosure. Outcome.,3314483004,0.0002042523673173133,all loans
+disposition_date,loan_monthly_view,DATE,Date the property was sold or the loan settled. Outcome.,3314483004,0.00020238782313574958,all loans
+foreclosure_costs,loan_monthly_view,"DECIMAL(12,2)",Cost of foreclosure. Loss.,3314483004,0.0001989160901426665,all loans
+preservation_repair_costs,loan_monthly_view,"DECIMAL(12,2)",Cost of keeping and repairing the property. Loss.,3314483004,0.00018178732528507485,all loans
+asset_recovery_costs,loan_monthly_view,"DECIMAL(12,2)",Cost of recovering the property. Loss.,3314483004,0.00015766682145279754,all loans
+misc_holding_expenses,loan_monthly_view,"DECIMAL(12,2)",Other holding costs and credits. Loss.,3314483004,0.00019148235161684963,all loans
+holding_taxes,loan_monthly_view,"DECIMAL(12,2)",Taxes paid while holding the property. Loss.,3314483004,0.00018760452210784666,all loans
+net_sales_proceeds,loan_monthly_view,"DECIMAL(12,2)",Cash from selling the property. Recovery.,3314483004,0.0001986873968595556,all loans
+credit_enhancement_proceeds,loan_monthly_view,"DECIMAL(12,2)",Cash from mortgage insurance and other cover. Recovery.,3314483004,0.00014479995806911672,all loans
+repurchase_make_whole_proceeds,loan_monthly_view,"DECIMAL(12,2)",Cash from the lender buying the loan back. Recovery.,3314483004,0.00012691481582266094,all loans
+other_foreclosure_proceeds,loan_monthly_view,"DECIMAL(12,2)",Other cash from foreclosure. Recovery.,3314483004,0.00016015891448511408,all loans
+mod_non_interest_upb,loan_monthly_view,"DECIMAL(12,2)",Part of the balance that bears no interest after a modification.,3314483004,0.014364494837518256,all loans
+principal_forgiveness,loan_monthly_view,"DECIMAL(12,2)","Principal forgiven, usually with a modification. Loss to the lender; never non-zero in the test data.",3314483004,0.009562335652875774,all loans
+servicer_activity,loan_monthly_view,VARCHAR,Change in servicing activity in the month.,3314483004,0.9872775175045068,all loans
+foreclosure_writeoff,loan_monthly_view,"DECIMAL(12,2)",Principal written off as uncollectable after foreclosure. Loss; 572 non-zero values sit on rows without an exit code (2005Q1).,3314483004,0.009565072731324828,all loans
+borrower_assistance_plan,loan_monthly_view,VARCHAR,"Forbearance, repayment or trial plan at the reporting date.",3314483004,0.32259285587213105,all loans
+repurchase_make_whole_flag,loan_monthly_view,VARCHAR,Lender bought the loan back. Outcome.,3314483004,0.012722500899570157,all loans
+alt_delinquency_resolution,loan_monthly_view,VARCHAR,Payment deferral or other arrears resolution at the reporting date.,3314483004,0.32259285587213105,all loans
+alt_delinquency_resolution_count,loan_monthly_view,INTEGER,Number of payment deferrals up to the reporting date.,3314483004,0.005830385003235334,all loans
+total_deferral_amount,loan_monthly_view,"DECIMAL(12,2)",Balance deferred up to the reporting date.,3314483004,0.005641464137071798,all loans
+payment_deferral_mod_event,loan_monthly_view,VARCHAR,Payment deferral treated as a modification in the month.,3314483004,1.0,all loans
+acquisition_quarter,loan_monthly_view,VARCHAR,"Quarter Fannie Mae acquired the loan, taken from the file name. Groups loans by vintage; not a feature.",3314483004,1.0,all loans
+delinquency_months,loan_monthly_view,INTEGER,"Months in arrears as a whole number, built from delinquency_status. Same lag.",3314483004,0.9908268963927986,all loans
+exit_reason,loan_monthly_view,VARCHAR,Label of zero_balance_code. Outcome.,3314483004,0.012722482495493286,all loans
+is_dpd_unknown,loan_monthly_view,BOOLEAN,"Arrears status not known that month (XX), built from delinquency_status. Same lag.",3314483004,1.0,all loans
+loan_id,loans_table,VARCHAR,Loan identifier. Joins the tables; not a feature.,57597528,1.0,all loans
+channel,loans_table,VARCHAR,"How the loan was sold to Fannie Mae (retail, broker, correspondent). Fixed at origination.",57597528,1.0,all loans
+seller_name,loans_table,VARCHAR,Lender that sold the loan. Taken from the loan's first month.,57597528,1.0,all loans
+note_rate,loans_table,"DECIMAL(6,3)",Interest rate on the note at origination.,57597528,0.9999999131907189,all loans
+orig_upb,loans_table,"DECIMAL(12,2)",Loan amount at origination.,57597528,1.0,all loans
+loan_term,loans_table,INTEGER,Term in months at origination.,57597528,1.0,all loans
+orig_date,loans_table,DATE,Date the loan was made.,57597528,1.0,all loans
+first_payment_date,loans_table,DATE,"First scheduled payment date, set at origination.",57597528,1.0,all loans
+orig_ltv,loans_table,INTEGER,Loan to value at origination.,57597528,0.9999998090195815,all loans
+orig_cltv,loans_table,INTEGER,Combined loan to value at origination.,57597528,0.994674788820798,all loans
+num_borrowers,loans_table,INTEGER,Number of borrowers at origination.,57597528,0.9998290378017612,all loans
+dti,loans_table,INTEGER,Debt to income at origination.,57597528,0.9867101588109823,all loans
+credit_score,loans_table,INTEGER,Borrower credit score at origination.,57597528,0.9969804606892156,all loans
+co_borrower_credit_score,loans_table,INTEGER,Co-borrower credit score at origination.,57597528,0.4867414622377544,all loans
+first_time_buyer,loans_table,VARCHAR,First-time home buyer at origination.,57597528,0.9996657495439735,all loans
+loan_purpose,loans_table,VARCHAR,"Purchase, refinance or cash-out refinance.",57597528,1.0,all loans
+property_type,loans_table,VARCHAR,Property type at origination.,57597528,1.0,all loans
+num_units,loans_table,INTEGER,Number of units at origination.,57597528,1.0,all loans
+occupancy,loans_table,VARCHAR,"Owner occupied, second home or investor at origination.",57597528,1.0,all loans
+property_state,loans_table,VARCHAR,State of the property.,57597528,1.0,all loans
+msa,loans_table,VARCHAR,Metropolitan area of the property. Taken from the loan's first month.,57597528,1.0,all loans
+zip3,loans_table,VARCHAR,First three digits of the property zip code.,57597528,0.9999999652762875,all loans
+mi_pct,loans_table,"DECIMAL(6,2)",Mortgage insurance cover at origination.,57597528,0.20785353843658014,all loans
+amortization_type,loans_table,VARCHAR,Fixed or adjustable rate.,57597528,1.0,all loans
+prepay_penalty,loans_table,VARCHAR,Prepayment penalty in the loan terms.,57597528,0.9999627414565431,all loans
+interest_only,loans_table,VARCHAR,Interest-only loan terms.,57597528,0.7815167171757788,all loans
+io_first_pi_date,loans_table,DATE,"First full payment date of an interest-only loan, set in the loan terms.",57597528,1.7361856224107395e-08,all loans
+mi_type,loans_table,VARCHAR,"Who pays the mortgage insurance, set at origination.",57597528,0.20785353843658014,all loans
+special_eligibility_program,loans_table,VARCHAR,Special lending program at origination.,57597528,1.0,all loans
+relocation_mortgage,loans_table,VARCHAR,"Relocation loan, set at origination.",57597528,1.0,all loans
+property_valuation_method,loans_table,VARCHAR,How the property was valued at origination.,57597528,0.35619181434314334,all loans
+high_balance_loan,loans_table,VARCHAR,High-balance loan at origination.,57597528,1.0,all loans
+hltv_refi_option,loans_table,VARCHAR,High loan-to-value refinance program at origination.,57597528,1.0,all loans
+orig_classic_fico,loans_table,INTEGER,Lowest borrower credit score at origination.,57597528,0.2695794687577564,all loans
+acquisition_quarter,loans_table,VARCHAR,Quarter Fannie Mae acquired the loan. Groups loans by vintage; not a feature.,57597528,1.0,all loans
