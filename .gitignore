@@ -11,3 +11,6 @@ residential_mortgage/00_data/raw/
 residential_mortgage/00_data/processed/
 *.duckdb*
 *.parquet
+
+# Private working docs (local only; never commit or push)
+docs/
