@@ -15,34 +15,75 @@ Rules the whole platform follows (05_observation_windows.ipynb draws them):
 Where the values come from:
 - Window and horizon choices: docs/module_2/module-2-plan.md decisions M2-3, M2-5, M2-9,
   M2-13 and the script specs (roll rates, vintage curves, forbearance).
-- The regulatory thresholds in DPD_DEFAULT_MONTHS and PROBATION_* live here for now because
-  regulatory_parameters.py is still an empty skeleton (values are added there only when the
-  module that needs them is signed off). At Module 2 sign-off these three move into
-  residential_mortgage/regulatory_parameters.py and this file imports them from there, so the
-  regulatory numbers stay in one place.
+- The regulatory thresholds below (`MIN_DATA_YEARS`, `DPD_DEFAULT_MONTHS`, and `PROBATION_*`)
+  are imported from `residential_mortgage/regulatory_parameters.py` so every regulatory
+  number stays in one place (populated for Module 2 per D-030 and D-031).
 """
+
+try:
+    from .regulatory_parameters import (
+        ACTIVE_RELIEF_PLANS,
+        COVID_DEFERRAL_ELIGIBLE_END,
+        COVID_DEFERRAL_ELIGIBLE_START,
+        COVID_DEFERRAL_MAX_END,
+        COVID_DEFERRAL_MAX_MONTHS,
+        CREDIT_EXIT_CODES,
+        DEFERRAL_RESOLUTION_CODES,
+        DPD_DEFAULT_MONTHS,
+        IRB_RESIDENTIAL_CORRELATION,
+        LGD_HOUSE_PRICE_FALL_MIN_PCT,
+        LGD_HOUSE_PRICE_FALL_REF_PCT,
+        LTV_DOWNWARD_MARKET_DECLINE_PCT,
+        MIN_DATA_YEARS,
+        NO_RELIEF_PLAN_CODES,
+        PROBATION_ARREARS_MONTHS,
+        PROBATION_RESTRUCTURING_MONTHS,
+        PROPERTY_REVAL_MAX_YEARS,
+        RETAIL_MATERIALITY_GBP,
+        RETAIL_MATERIALITY_PCT,
+        SA_OWNER_OCCUPIED_LTV_SPLIT,
+    )
+except ImportError:
+    from regulatory_parameters import (
+        ACTIVE_RELIEF_PLANS,
+        COVID_DEFERRAL_ELIGIBLE_END,
+        COVID_DEFERRAL_ELIGIBLE_START,
+        COVID_DEFERRAL_MAX_END,
+        COVID_DEFERRAL_MAX_MONTHS,
+        CREDIT_EXIT_CODES,
+        DEFERRAL_RESOLUTION_CODES,
+        DPD_DEFAULT_MONTHS,
+        IRB_RESIDENTIAL_CORRELATION,
+        LGD_HOUSE_PRICE_FALL_MIN_PCT,
+        LGD_HOUSE_PRICE_FALL_REF_PCT,
+        LTV_DOWNWARD_MARKET_DECLINE_PCT,
+        MIN_DATA_YEARS,
+        NO_RELIEF_PLAN_CODES,
+        PROBATION_ARREARS_MONTHS,
+        PROBATION_RESTRUCTURING_MONTHS,
+        PROPERTY_REVAL_MAX_YEARS,
+        RETAIL_MATERIALITY_GBP,
+        RETAIL_MATERIALITY_PCT,
+        SA_OWNER_OCCUPIED_LTV_SPLIT,
+    )
 
 # ── The snapshot and the two windows it splits ────────────────────────────────────────────
 # t0 is the observation point; features end at t0-1, the outcome starts after t0.
 FEATURE_LAG_MONTHS = 1            # "use month t-1" rule (feature catalogue, monthly_lag_1)
-FEATURE_LOOKBACK_MONTHS = 6       # worst-arrears lookback, module-2-plan stage 7
-FEATURE_LOOKBACK_MONTHS_LONG = 12  # worst-12-months / 12-month payment pattern, stage 7
+FEATURE_LOOKBACK_MONTHS = 6       # worst-arrears lookback, module-2-plan script 9
+FEATURE_LOOKBACK_MONTHS_LONG = 12  # worst-12-months / 12-month payment pattern, script 9
 PERFORMANCE_WINDOW_MONTHS = 12    # default within the next 12 months (M2-9)
 PERFORMANCE_WINDOW_MONTHS_LONG = 24  # long-horizon outcome (re-default, M2-9/forbearance)
 
 # ── Loan eligibility ───────────────────────────────────────────────────────────────────────
 SEASONING_MIN_MOB = 6             # months on book before first observation; masked-balance months
 SNAPSHOT_MONTH = 12               # book_snapshot is taken every December (M2-12)
-MIN_DATA_YEARS = 5                # retail PD data needs >= 5 years (Article 180(2)(e))
-
-# ── Default and probation (move to regulatory_parameters.py at Module 2 sign-off) ──────────
-DPD_DEFAULT_MONTHS = 3            # 3 months behind = 90-119 DPD; M2-3 (Article 178(1)(b))
-PROBATION_ARREARS_MONTHS = 3      # clean months after an arrears default; M2-5 (178(5)(a))
-PROBATION_RESTRUCTURING_MONTHS = 12  # clean months after distressed restructuring; M2-5 (178(5A))
+# MIN_DATA_YEARS, DPD_DEFAULT_MONTHS, PROBATION_ARREARS_MONTHS, PROBATION_RESTRUCTURING_MONTHS
+# are imported from regulatory_parameters above.
 
 # ── Forward horizons used for projection and re-default ───────────────────────────────────
-PROJECTION_HORIZONS_MONTHS = [6, 12, 24, 36]   # roll-rate projection (stage 3)
-RE_DEFAULT_WINDOWS_MONTHS = [12, 24]           # re-default after modification/deferral (stage 9)
+PROJECTION_HORIZONS_MONTHS = [6, 12, 24, 36]   # roll-rate projection (script 3)
+RE_DEFAULT_WINDOWS_MONTHS = [12, 24]           # re-default after modification/deferral (script 12)
 
 # ── Out-of-time split (M2-13): Module 3 may choose another split ──────────────────────────
 OUT_OF_TIME_FROM = "2022-12"
@@ -63,14 +104,14 @@ WINDOW_VOCABULARY = [
         "direction": "backward",
         "definition": "Months before t0 whose values become features. Ends at t0-1.",
         "value": f"lookback {FEATURE_LOOKBACK_MONTHS} months (and {FEATURE_LOOKBACK_MONTHS_LONG} for worst-12/payment pattern); lag {FEATURE_LAG_MONTHS} month",
-        "source": "feature catalogue; stage 7",
+        "source": "feature catalogue; script 9",
     },
     {
         "window": "Performance / outcome window",
         "direction": "forward",
         "definition": "Months after t0 over which the label is measured. A feature taken from here is leakage.",
         "value": f"{PERFORMANCE_WINDOW_MONTHS} months (default); {PERFORMANCE_WINDOW_MONTHS_LONG} for re-default",
-        "source": "M2-9; stage 9",
+        "source": "M2-9; script 12",
     },
     {
         "window": "Sample coverage window",
@@ -105,7 +146,7 @@ WINDOW_VOCABULARY = [
         "direction": "forward",
         "definition": "Forward periods for roll-rate / PD projection, holding monthly rates fixed.",
         "value": f"{PROJECTION_HORIZONS_MONTHS} months",
-        "source": "stage 3",
+        "source": "script 3",
     },
     {
         "window": "Emergence lag",
