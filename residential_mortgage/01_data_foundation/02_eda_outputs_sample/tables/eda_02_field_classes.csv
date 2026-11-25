@@ -1,6 +1,0 @@
-field_class,source_object,fields
-key,loan_monthly_view,3
-key,loans_table,2
-monthly_lag_1,loan_monthly_view,21
-origination,loans_table,33
-quarantined,loan_monthly_view,19

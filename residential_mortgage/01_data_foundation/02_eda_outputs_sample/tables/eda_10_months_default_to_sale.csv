@@ -1,6 +1,0 @@
-code,exits,median,p25,p75,p90,reason
-all,64501,17.0,10.0,28.0,45.0,all credit exits
-02,6851,12.0,7.0,22.0,37.0,third-party sale
-03,10112,8.0,4.0,15.0,26.0,short sale
-09,44593,19.0,13.0,30.0,46.0,deed-in-lieu or REO
-15,2945,24.0,16.0,47.0,76.0,non-performing note sale

@@ -1,5 +1,0 @@
-step,loans_left,loans_removed,pct_of_all_loans,median_credit_score_of_removed,median_ltv_of_removed,median_dti_of_removed
-All loans,5759759,0,100.0,,,
-With a first payment date,5759759,0,100.0,,,
-Observed for 24 months,5559945,199814,96.53086179473829,770.0,80.0,39.0
-Outcome population (bad + good),5554391,5554,96.4344341490677,743.0,76.0,38.0

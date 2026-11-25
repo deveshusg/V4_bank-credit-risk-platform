@@ -1,9 +1,0 @@
-test,loans,pct_of_loans
-loans with no monthly rows,0,0.0
-loans with months missing inside the history,1237,0.021476593031062585
-loans with rows after the exit,0,0.0
-"loans that stopped reporting before the end of the data, with no exit code",1,1.7361837535216316e-05
-seasoned loans (origination before the acquisition quarter),2282686,39.6316234759128
-seasoned by more than 12 months,6383,0.11082060898728575
-seasoned by more than 24 months,1198,0.02079948136718915
-loans with more than one servicer,1965000,34.116010756700064

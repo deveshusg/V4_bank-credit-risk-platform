@@ -1,0 +1,4 @@
+[sampling]
+rate = 0.0003
+seed = 42
+corr_subsample_rows = 100_000

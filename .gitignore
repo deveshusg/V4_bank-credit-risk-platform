@@ -3,10 +3,14 @@
 __pycache__/
 *.pyc
 
-# Temporary extraction scratch directory
+# Temporary extraction scratch directory and logs
 .scratch/
 
-# Raw and processed datasets (keep folder structure via .gitkeep; ignore all data files)
+# Ignore database binaries and Parquet lakes globally (approved sample artifacts re-included below)
+*.duckdb*
+*.parquet
+
+# Raw datasets (keep folder structure via .gitkeep; ignore all data files)
 residential_mortgage/00_data/raw/*
 !residential_mortgage/00_data/raw/fannie_mae/
 !residential_mortgage/00_data/raw/macro/
@@ -18,10 +22,23 @@ residential_mortgage/00_data/raw/macro/*
 residential_mortgage/00_data/raw/parquet/*
 !residential_mortgage/00_data/raw/parquet/.gitkeep
 
+# Processed datasets & centralized module_outputs
 residential_mortgage/00_data/processed/*
 !residential_mortgage/00_data/processed/.gitkeep
-*.duckdb*
-*.parquet
+!residential_mortgage/00_data/processed/module_outputs/
+residential_mortgage/00_data/processed/module_outputs/**
+!residential_mortgage/00_data/processed/module_outputs/**/
+!residential_mortgage/00_data/processed/module_outputs/**/.gitkeep
+!residential_mortgage/00_data/processed/module_outputs/00_data/mortgages_sample.duckdb
+!residential_mortgage/00_data/processed/module_outputs/02_portfolio_analytics/sample/module2_sample.duckdb
+!residential_mortgage/00_data/processed/module_outputs/**/sample/**/*.png
+!residential_mortgage/00_data/processed/module_outputs/**/sample/**/18_portfolio_findings.md
 
-# Private working docs (local only; never commit or push)
+# Retired legacy output paths
+residential_mortgage/02_portfolio_analytics/outputs/
+residential_mortgage/02_portfolio_analytics/outputs_sample/
+residential_mortgage/01_data_foundation/02_eda_outputs/
+residential_mortgage/01_data_foundation/02_eda_outputs_sample/
+
+# Private working docs (local only; covers root docs/ and <module>/docs/)
 docs/

@@ -1,0 +1,12 @@
+[duckdb]
+memory_limit = "6GB"
+convert_memory_limit = "8GB"
+threads = 4
+
+[io]
+zip_chunk_mb = 64
+
+[charts]
+dpi = 300
+fig_width = 14
+fig_height = 8

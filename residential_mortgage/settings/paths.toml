@@ -1,0 +1,12 @@
+[data]
+raw_dir = "00_data/raw"
+fannie_mae_zip = "00_data/raw/fannie_mae/Performance_All.zip"
+macro_dir = "00_data/raw/macro"
+parquet_dir = "00_data/raw/parquet"
+processed_dir = "00_data/processed"
+module_outputs_dir = "00_data/processed/module_outputs"
+scratch_dir = "../.scratch"
+
+[databases]
+full_db = "mortgages.duckdb"
+sample_db = "mortgages_sample.duckdb"

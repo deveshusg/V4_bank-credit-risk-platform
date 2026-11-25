@@ -1,0 +1,12 @@
+[fannie_mae]
+zip_filename = "Performance_All.zip"
+quarter_start = "2000Q1"
+quarter_end = "2025Q4"
+
+[fred]
+fedfunds_url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS"
+unrate_url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE"
+known_unemployment_gaps = ["2025-10-01"]
+
+[fhfa]
+hpi_url = "https://www.fhfa.gov/hpi/download/monthly/hpi_master.csv"

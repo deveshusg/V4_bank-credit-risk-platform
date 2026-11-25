@@ -9,7 +9,7 @@ Each value carries:
 
 Where a UK rule meets US Fannie Mae data, the departure is listed in
 docs\\departures_from_uk_rules.md. The LGD discount rates (SONIA+5% currency-adapted to
-FEDFUNDS+5%, and max(9%, long_run_rate)) are built in 00_data\\build_macro_tables.py (D-025).
+FEDFUNDS+5%, and max(9%, long_run_rate)) are built in 00_data\\scripts\\03_build_macro_tables.py (D-025).
 """
 
 # ── Definition of default and portfolio checks (Module 2) ─────────────────────────────────

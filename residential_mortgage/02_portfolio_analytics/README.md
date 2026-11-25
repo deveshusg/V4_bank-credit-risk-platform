@@ -5,14 +5,14 @@ and probation rules (with documented US data departures), measures roll rates an
 vintage curves, indexes property values, tracks recoveries and relief performance, and hands
 reconciled marts to Modules 3 to 8.
 
-**Status:** Rebuilt to [docs/module_2/module-2-design.md](../../docs/module_2/module-2-design.md)
-(`D-030`, `D-031`). Run from the repo root with `.venv\Scripts\python.exe`; pass `--sample` for
-isolated 10% development storage (`monthly_core_sample/`, `module2_marts_sample.duckdb`,
-`outputs_sample/`, and `outputs_sample/18_portfolio_findings_sample.md`).
+**Status:** Rebuilt to `02_portfolio_analytics/docs/module-2-design.md` (`D-030`, `D-031`, restructured per `restructure_plan.md`).
+All scripts live in `scripts/`, tests in `tests/test_module2.py`, and configuration in `residential_mortgage/settings/*.toml`.
 
-Full production runs write `residential_mortgage\00_data\processed\monthly_core\`,
-`module2_marts.duckdb`, `02_portfolio_analytics\outputs\`, and
-`docs\module_2\18_portfolio_findings.md`.
+By default every run uses the **0.03% stratified sample DB** (`mortgages_sample.duckdb`) and writes into:
+`residential_mortgage\00_data\processed\module_outputs\02_portfolio_analytics\sample\` (`module2_sample.duckdb`, `<script_stem>\` charts/snapshots/findings).
+
+Opt-in full production runs (`--full`) read `mortgages.duckdb` and write into `...\module_outputs\02_portfolio_analytics\full\` (`module2.duckdb`).
+Run the pipeline from repo root: `.venv\Scripts\python.exe residential_mortgage\02_portfolio_analytics\run_module2.py` (add `--full` for production, `--from-step NN` to resume, or `--dry-run` to preview).
 
 | # | Script | What it builds | Reads first |
 |---|---|---|---|

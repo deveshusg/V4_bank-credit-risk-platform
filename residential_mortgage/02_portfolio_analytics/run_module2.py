@@ -1,8 +1,8 @@
 """Run the Module 2 portfolio analytics pipeline in dependency order (00 to 18).
 
 Usage:
-    .venv\\Scripts\\python.exe residential_mortgage\\02_portfolio_analytics\\run_module2.py --sample
     .venv\\Scripts\\python.exe residential_mortgage\\02_portfolio_analytics\\run_module2.py
+    .venv\\Scripts\\python.exe residential_mortgage\\02_portfolio_analytics\\run_module2.py --full
 """
 
 from __future__ import annotations
@@ -14,9 +14,10 @@ import time
 from pathlib import Path
 from typing import TextIO
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+MODULE_DIR = Path(__file__).resolve().parent
+SCRIPTS_DIR = MODULE_DIR / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
 
 from module2_common import REPO_ROOT, SCRATCH_DIR  # noqa: E402
 
@@ -70,16 +71,16 @@ def emit(line: str, log_file: TextIO | None) -> None:
         log_file.flush()
 
 
-def run_step(script_stem: str, sample: bool, log_file: TextIO | None) -> int:
+def run_step(script_stem: str, full: bool, log_file: TextIO | None) -> int:
     """Execute one Module 2 script with unbuffered output streamed to stdout and log_file."""
-    script_path = SCRIPT_DIR / f"{script_stem}.py"
+    script_path = SCRIPTS_DIR / f"{script_stem}.py"
     if not script_path.is_file():
         emit(f"FAIL  missing script: {script_path}\n", log_file)
         return 1
 
     cmd = [sys.executable, "-u", str(script_path)]
-    if sample:
-        cmd.append("--sample")
+    if full:
+        cmd.append("--full")
 
     emit(f"=== {script_stem} ===\n", log_file)
     t0 = time.perf_counter()
@@ -107,9 +108,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse CLI options for the Module 2 batch runner."""
     parser = argparse.ArgumentParser(description="Run Module 2 scripts 00 through 18 sequentially.")
     parser.add_argument(
-        "--sample",
+        "--full",
         action="store_true",
-        help="Pass --sample to each script (isolated 10%% development data and marts).",
+        help="Run against full mortgages.duckdb into full/ outputs (default uses sample DB).",
     )
     parser.add_argument(
         "--from-step",
@@ -120,7 +121,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--log",
         type=Path,
         default=None,
-        help="Optional log file path (default: .scratch/module2_run[_sample].log).",
+        help="Optional log file path (default: .scratch/module2_run[_full].log).",
     )
     parser.add_argument(
         "--dry-run",
@@ -137,14 +138,14 @@ def main(argv: list[str] | None = None) -> int:
     selected = SCRIPTS[start_idx:]
 
     if args.dry_run:
-        mode = "--sample" if args.sample else "full"
+        mode = "full" if args.full else "sample (default)"
         print(f"Module 2 dry-run ({mode}, {len(selected)} scripts):")
         for stem in selected:
-            suffix = " --sample" if args.sample else ""
-            print(f"  {sys.executable} -u {SCRIPT_DIR / f'{stem}.py'}{suffix}")
+            suffix = " --full" if args.full else ""
+            print(f"  {sys.executable} -u {SCRIPTS_DIR / f'{stem}.py'}{suffix}")
         return 0
 
-    default_log = SCRATCH_DIR / ("module2_run_sample.log" if args.sample else "module2_run.log")
+    default_log = SCRATCH_DIR / ("module2_run_full.log" if args.full else "module2_run_sample.log")
     log_path = args.log if args.log is not None else default_log
     if not log_path.is_absolute():
         log_path = REPO_ROOT / log_path
@@ -153,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
     t_all = time.perf_counter()
     with log_path.open("w", encoding="utf-8", errors="replace") as log_file:
         for stem in selected:
-            rc = run_step(stem, sample=args.sample, log_file=log_file)
+            rc = run_step(stem, full=args.full, log_file=log_file)
             if rc != 0:
                 emit(f"OVERALL: FAIL on {stem} (log: {log_path})\n", log_file)
                 return rc
