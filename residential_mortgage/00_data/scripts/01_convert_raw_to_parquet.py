@@ -41,7 +41,7 @@ for _p in (str(SCRIPT_DIR), str(PACKAGE_ROOT)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import config  # noqa: E402
+from _settings import config  # noqa: E402
 from field_map import FIELDS  # noqa: E402
 
 _PATHS = config.paths()

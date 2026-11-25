@@ -16,7 +16,7 @@ Where the values come from:
 - Window and horizon choices: docs/module_2/module-2-plan.md decisions M2-3, M2-5, M2-9,
   M2-13 and the script specs (roll rates, vintage curves, forbearance).
 - The regulatory thresholds below (`MIN_DATA_YEARS`, `DPD_DEFAULT_MONTHS`, and `PROBATION_*`)
-  are imported from `residential_mortgage/regulatory_parameters.py` so every regulatory
+  are imported from `residential_mortgage/_settings/regulatory_parameters.py` so every regulatory
   number stays in one place (populated for Module 2 per D-030 and D-031).
 """
 

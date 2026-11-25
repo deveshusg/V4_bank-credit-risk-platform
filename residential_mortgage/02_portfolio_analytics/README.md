@@ -6,7 +6,7 @@ vintage curves, indexes property values, tracks recoveries and relief performanc
 reconciled marts to Modules 3 to 8.
 
 **Status:** Rebuilt to `02_portfolio_analytics/docs/module-2-design.md` (`D-030`, `D-031`, restructured per `restructure_plan.md`).
-All scripts live in `scripts/`, tests in `tests/test_module2.py`, and configuration in `residential_mortgage/settings/*.toml`.
+All scripts live in `scripts/`, tests in `tests/test_module2.py`, and configuration in `residential_mortgage/_settings/*.toml`.
 
 By default every run uses the **0.03% stratified sample DB** (`mortgages_sample.duckdb`) and writes into:
 `residential_mortgage\00_data\processed\module_outputs\02_portfolio_analytics\sample\` (`module2_sample.duckdb`, `<script_stem>\` charts/snapshots/findings).

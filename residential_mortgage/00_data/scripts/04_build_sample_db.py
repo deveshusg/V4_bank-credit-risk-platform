@@ -36,7 +36,7 @@ if str(SCRIPT_DIR) not in sys.path:
 if str(PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(PACKAGE_ROOT))
 
-import config  # noqa: E402
+from _settings import config  # noqa: E402
 from field_map import EXIT_REASONS, SQL_TYPES, fields_for  # noqa: E402
 
 _PATHS = config.paths()

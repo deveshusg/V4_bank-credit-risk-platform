@@ -1,8 +1,8 @@
 """Shared helpers for Module 2 (02_portfolio_analytics).
 
-Provides database connection and memory/thread settings from settings/*.toml,
+Provides database connection and memory/thread settings from _settings/*.toml,
 sample vs full path resolution (default = 0.03% sample DB, --full = opt-in),
-regulatory threshold imports from regulatory_parameters.py, enforced unique-key
+regulatory threshold imports from _settings/regulatory_parameters.py, enforced unique-key
 and non-null checks, COVID deferral hold logic, closed-form scheduled balance
 calculation, and matplotlib saving helpers.
 """
@@ -29,8 +29,7 @@ REPO_ROOT = PACKAGE_ROOT.parent
 if str(PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(PACKAGE_ROOT))
 
-import config  # noqa: E402
-import windows  # noqa: E402
+from _settings import config, windows  # noqa: E402
 
 _PATHS = config.paths()
 _COMPUTE = config.load("compute")

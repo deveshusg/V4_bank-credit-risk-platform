@@ -6,13 +6,13 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-PACKAGE_ROOT = Path(__file__).resolve().parent
+SETTINGS_DIR = Path(__file__).resolve().parent
+PACKAGE_ROOT = SETTINGS_DIR.parent
 REPO_ROOT = PACKAGE_ROOT.parent
-SETTINGS_DIR = PACKAGE_ROOT / "settings"
 
 
 def load(name: str) -> dict[str, Any]:
-    """Load one TOML settings group from residential_mortgage/settings/<name>.toml."""
+    """Load one TOML settings group from residential_mortgage/_settings/<name>.toml."""
     path = SETTINGS_DIR / f"{name}.toml"
     if not path.is_file():
         raise FileNotFoundError(f"Settings file not found: {path}")

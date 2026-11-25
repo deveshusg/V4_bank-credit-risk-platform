@@ -22,7 +22,7 @@ for _p in (str(PACKAGE_ROOT), str(DATA_SCRIPTS_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import config  # noqa: E402
+from _settings import config  # noqa: E402
 from field_map import FIELDS  # noqa: E402
 
 DEFAULT_DB = config.base_db_path(full=False)

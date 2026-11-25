@@ -8,7 +8,7 @@ Builds and validates the base data stores in dependency order under `00_data/scr
 | 01 | `01_convert_raw_to_parquet.py` | Converts raw CSVs from `Performance_All.zip` into ZSTD Parquet + `.conversion.json` | `raw/fannie_mae/Performance_All.zip` | `raw/parquet/YYYYQn.parquet` |
 | 02 | `02_build_base_tables.py` | Materializes `loans_table` and refreshes `loan_monthly_view`; 7 atomic checks per quarter | `raw/parquet/` | `processed/mortgages.duckdb` |
 | 03 | `03_build_macro_tables.py` | Loads FRED (`FEDFUNDS`, `UNRATE`) + FHFA (`hpi_master.csv`) and PRA LGD discount rates; 6 checks | `raw/macro/` | Target DB (`sample` default, or `--full`) |
-| 04 | `04_build_sample_db.py` | Builds self-contained 0.03% per-quarter stratified `mortgages_sample.duckdb` (~55 MB, GitHub-tracked) | `processed/mortgages.duckdb` | `processed/module_outputs/00_data/mortgages_sample.duckdb` |
+| 04 | `04_build_sample_db.py` | Builds self-contained 0.03% per-quarter stratified `mortgages_sample.duckdb` (`42.01 MB`, GitHub-tracked) | `processed/mortgages.duckdb` | `processed/module_outputs/00_data/mortgages_sample.duckdb` |
 
 ## Subfolders
 - `scripts/`: Runnable data pipeline scripts (`01_`–`04_`) and `field_map.py`.
