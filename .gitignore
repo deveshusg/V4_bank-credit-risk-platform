@@ -6,9 +6,20 @@ __pycache__/
 # Temporary extraction scratch directory
 .scratch/
 
-# Raw and processed datasets (never commit large binary assets)
-residential_mortgage/00_data/raw/
-residential_mortgage/00_data/processed/
+# Raw and processed datasets (keep folder structure via .gitkeep; ignore all data files)
+residential_mortgage/00_data/raw/*
+!residential_mortgage/00_data/raw/fannie_mae/
+!residential_mortgage/00_data/raw/macro/
+!residential_mortgage/00_data/raw/parquet/
+residential_mortgage/00_data/raw/fannie_mae/*
+!residential_mortgage/00_data/raw/fannie_mae/.gitkeep
+residential_mortgage/00_data/raw/macro/*
+!residential_mortgage/00_data/raw/macro/.gitkeep
+residential_mortgage/00_data/raw/parquet/*
+!residential_mortgage/00_data/raw/parquet/.gitkeep
+
+residential_mortgage/00_data/processed/*
+!residential_mortgage/00_data/processed/.gitkeep
 *.duckdb*
 *.parquet
 
