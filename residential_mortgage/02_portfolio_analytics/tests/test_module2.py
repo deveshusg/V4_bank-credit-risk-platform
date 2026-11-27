@@ -534,6 +534,12 @@ class TestStageBToGFormulasAndPipeline(unittest.TestCase):
             msa_row = c.q(m_con, "SELECT * FROM concentration_mart WHERE concentration_dim='msa' AND snapshot_year=2022").iloc[0]
             self.assertEqual(int(msa_row["entities_count"]), 3)  # L1, L3, L5 valid MSAs; L6='00000' excluded
             self.assertGreater(float(msa_row["unmapped_or_non_msa_share_pct"]), 0.0)
+            # Assert P1-1 psi_by_year_mart covers all drivers with zero PSI in latest year (2022)
+            max_yr_psi = float(c.scalar(m_con, "SELECT max(abs(psi_vs_today)) FROM psi_by_year_mart WHERE snapshot_year=2022"))
+            self.assertLess(max_yr_psi, 1e-9)
+            # Assert P1-2 threshold_sensitivity_mart counts each crossing loan once across all eras
+            tot_2m = int(c.scalar(m_con, "SELECT sum(loans_reaching) FROM threshold_sensitivity_mart WHERE dpd_threshold_months=2"))
+            self.assertEqual(tot_2m, 1)  # Only L2 reaches >= 2m behind across 2020-2022 in fixture
 
             # Verify default sample code paths write into module_outputs-style per-script folders
             out_s = root / "out_sample"

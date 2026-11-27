@@ -106,11 +106,13 @@ def run_emergence(marts: object, core_files: list[Path]) -> int:
         if not lags_q.empty:
             lag_parts.append(lags_q)
 
-        # Threshold sensitivity per loan-era first crossing of 2, 3, 4 months behind (plus active base)
+        # Assign each loan's 60/90/120-day threshold crossing once to the era of first 60+ DPD onset
+        # Prevents cross-era double counting while keeping active loan totals per era in denominator
         sens_q = c.q(marts, f"""
             WITH m AS (
                 SELECT
                     m.loan_id,
+                    m.reporting_period,
                     {c.era_case('m.reporting_period')} AS era,
                     COALESCE(ca.adj_dpd, m.delinquency_months) AS adj_dpd
                 FROM read_parquet('{fp}') m
@@ -118,19 +120,34 @@ def run_emergence(marts: object, core_files: list[Path]) -> int:
                   ON ca.loan_id = m.loan_id AND ca.reporting_period = m.reporting_period
                 WHERE NOT m.is_dpd_unknown
             ),
-            per_loan_era AS (
+            active_era AS (
+                SELECT era, count(DISTINCT loan_id)::BIGINT AS total_loans
+                FROM m
+                GROUP BY 1
+            ),
+            loan_onset AS (
                 SELECT
-                    era,
                     loan_id,
+                    min(reporting_period) FILTER (WHERE adj_dpd >= 2) AS first_2m_date,
                     max(COALESCE(adj_dpd, -1)) AS max_dpd
                 FROM m
-                GROUP BY 1, 2
+                GROUP BY loan_id
+            ),
+            crossed_by_era AS (
+                SELECT
+                    {c.era_case('first_2m_date')} AS era,
+                    count(*) FILTER (WHERE max_dpd >= 2)::BIGINT AS reach_2,
+                    count(*) FILTER (WHERE max_dpd >= 3)::BIGINT AS reach_3,
+                    count(*) FILTER (WHERE max_dpd >= 4)::BIGINT AS reach_4
+                FROM loan_onset
+                WHERE first_2m_date IS NOT NULL
+                GROUP BY 1
             )
-            SELECT era, 2::INTEGER AS dpd_threshold_months, count(*) FILTER (WHERE max_dpd >= 2)::BIGINT AS loans_reaching, count(*)::BIGINT AS total_loans FROM per_loan_era GROUP BY 1
+            SELECT a.era, 2::INTEGER AS dpd_threshold_months, COALESCE(c.reach_2, 0)::BIGINT AS loans_reaching, a.total_loans FROM active_era a LEFT JOIN crossed_by_era c ON c.era = a.era
             UNION ALL
-            SELECT era, 3::INTEGER, count(*) FILTER (WHERE max_dpd >= 3)::BIGINT, count(*)::BIGINT FROM per_loan_era GROUP BY 1
+            SELECT a.era, 3::INTEGER, COALESCE(c.reach_3, 0)::BIGINT, a.total_loans FROM active_era a LEFT JOIN crossed_by_era c ON c.era = a.era
             UNION ALL
-            SELECT era, 4::INTEGER, count(*) FILTER (WHERE max_dpd >= 4)::BIGINT, count(*)::BIGINT FROM per_loan_era GROUP BY 1
+            SELECT a.era, 4::INTEGER, COALESCE(c.reach_4, 0)::BIGINT, a.total_loans FROM active_era a LEFT JOIN crossed_by_era c ON c.era = a.era
         """)
         if not sens_q.empty:
             sens_parts.append(sens_q)

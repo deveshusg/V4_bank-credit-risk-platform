@@ -101,6 +101,45 @@ def run_representativeness(
     dist_df["psi_vs_today"] = [psi_map[(r.driver_name, r.baseline_window)] for r in dist_df.itertuples()]
     c.write_df(marts, "representativeness_mart", dist_df, ["driver_name", "baseline_window", "band"])
 
+    # Compute year-by-year PSI against Dec max_yr across all eight drivers to pinpoint drift onset
+    # Queries binned snapshot counts grouped by snapshot_year in SQL before calculating annual PSI
+    yr_queries = []
+    for drv, case_sql in DRIVER_BINS.items():
+        yr_queries.append(f"""
+            SELECT
+                '{drv}'::VARCHAR AS driver_name,
+                year(s.snapshot_date)::INTEGER AS snapshot_year,
+                ({case_sql})::VARCHAR AS band,
+                count(*)::BIGINT AS loans,
+                COALESCE(sum(s.current_upb), 0.0) AS balance_upb
+            FROM read_parquet('{snap_glob}') s
+            GROUP BY 1, 2, 3
+        """)
+    yr_dist = c.q(marts, " UNION ALL ".join(yr_queries))
+    yr_tot = yr_dist.groupby(["driver_name", "snapshot_year"])[["loans", "balance_upb"]].transform("sum")
+    yr_dist["loan_share"] = yr_dist["loans"] / yr_tot["loans"].clip(lower=1)
+
+    psi_yr_rows: list[dict] = []
+    for (drv, yr), g in yr_dist.groupby(["driver_name", "snapshot_year"]):
+        yr_int = int(yr)
+        psi_val = 0.0
+        if yr_int != max_yr:
+            band_shares = g.set_index("band")["loan_share"].to_dict()
+            all_bands = set(band_shares.keys()) | {b for (d, b) in today_shares if d == drv}
+            for b in all_bands:
+                e = max(float(band_shares.get(b, 0.0)), 1e-6)
+                a = max(float(today_shares.get((drv, b), 0.0)), 1e-6)
+                psi_val += (a - e) * float(np.log(a / e))
+        psi_yr_rows.append({
+            "driver_name": drv,
+            "snapshot_year": yr_int,
+            "loans": int(g["loans"].sum()),
+            "balance_upb": float(g["balance_upb"].sum()),
+            "psi_vs_today": float(psi_val),
+        })
+    psi_yr_df = pd.DataFrame(psi_yr_rows).sort_values(["driver_name", "snapshot_year"])
+    c.write_df(marts, "psi_by_year_mart", psi_yr_df, ["driver_name", "snapshot_year"])
+
     # Category A (data gaps) & Category B (lending & servicing shifts) for Margin of Conservatism
     where_l = c.scope(sample_filter, prefix=src_prefix)
     limit_rows: list[dict] = []
@@ -183,8 +222,11 @@ def run_representativeness(
     c.write_df(marts, "data_limits_mart", lim_df, ["category", "limit_name"])
 
     check.key(marts, "representativeness_mart", ["driver_name", "baseline_window", "band"])
+    check.key(marts, "psi_by_year_mart", ["driver_name", "snapshot_year"])
     check.key(marts, "data_limits_mart", ["category", "limit_name"])
     check.add("Dec baseline shares sum to 1.0 per driver", bool((dist_df.groupby(["driver_name", "baseline_window"])["loan_share"].sum().sub(1.0).abs() < 1e-6).all()))
+    max_yr_psi = float(psi_yr_df.loc[psi_yr_df["snapshot_year"] == max_yr, "psi_vs_today"].abs().max()) if not psi_yr_df.empty else 0.0
+    check.add("latest snapshot year has zero PSI against itself", max_yr_psi < 1e-9, f"max_err={max_yr_psi:.2e}")
     return check.finish()
 
 

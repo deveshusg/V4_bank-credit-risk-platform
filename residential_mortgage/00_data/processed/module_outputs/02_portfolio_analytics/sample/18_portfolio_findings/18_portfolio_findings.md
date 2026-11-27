@@ -1,9 +1,9 @@
 # Module 2 Findings: Portfolio Analytics
-Generated 2026-11-26 from Module 2 marts (`0.03% sample` run).
+Generated 2026-11-27 from Module 2 marts (`0.03% sample` run).
 Every figure below is queried directly from Module 2 mart tables.
 
 ## 1. Foundations (`00_build_monthly_core`, `01_data_audit`, `02_default_engine`)
-- **Balance roll-forward (`balance_rollforward_mart`):** latest month `2025-12-01`, `4,724` active loans, closing UPB `1,026,440,511` USD, count residual `0`, unexplained `-18,095` USD.
+- **Balance roll-forward (`balance_rollforward_mart`):** latest month `2025-12-01`, `4,724` active loans, closing UPB `1,026,440,511` USD, count residual `0`, unexplained `-2,044` USD.
 - **Continuity & plausibility (`01_data_audit.py` -> `data_plausibility_mart`):** `13` global checks stored.
   - `dup_loans`: `0` (`0.0000%`)
   - `early_noexit_loans`: `0` (`0.0000%`)
@@ -28,7 +28,7 @@ Every figure below is queried directly from Module 2 mart tables.
   - `1m_first` (`lifetime`): `27.80%` [95% CI `25.97%` to `29.70%`, Wilson score] (`616/2,216`)
   - `2m_first` (`lifetime`): `75.70%` [95% CI `72.58%` to `78.57%`, Wilson score] (`595/786`)
   - `never_behind_mob6` (`lifetime`): `3.60%` [95% CI `3.32%` to `3.90%`, Wilson score] (`572/15,901`)
-- **60/90/120-day sensitivity (`threshold_sensitivity_mart`):** 2m: 1,180, 3m: 905, 4m: 805.
+- **60/90/120-day sensitivity (`threshold_sensitivity_mart`):** 2m: 872, 3m: 675, 4m: 602.
 - **Top 5 peak-to-trough state HPI falls (`state_hpi_peaktotrough_mart`):**
   - `NV`: `-59.4%` (`2006-01-01` to `2011-10-01`)
   - `AZ`: `-49.7%` (`2006-10-01` to `2011-04-01`)
