@@ -7,7 +7,7 @@
 
 An end-to-end **UK PRA / CRR / IFRS 9 residential mortgage credit risk platform** evaluated empirically against **26 years of US Fannie Mae loan performance histories (`2000Q1`–`2025Q4`)**, built on DuckDB + ZSTD Parquet with a self-contained stratified sample database committed in Git.
 
-> **Sample-First & Clone-Ready:** Every script and notebook defaults to the **0.03% per-quarter stratified sample DuckDB** (`42.01 MB`, tracked in Git) with identical table schemas (`loans_table`, `loan_monthly_view`, full macro & catalogue tables), so anyone cloning this repo can execute the analytics pipeline, notebooks, and unit tests locally without downloading 90 GB of raw files.
+> **Sample-First & Clone-Ready:** Every script and notebook defaults to the **0.03% per-quarter stratified sample DuckDB** (`44.05 MB`, tracked in Git) with identical table schemas (`loans_table`, `loan_monthly_view`, full macro & catalogue tables), so anyone cloning this repo can execute the analytics pipeline, notebooks, and unit tests locally without downloading 90 GB of raw files.
 
 ---
 
@@ -17,8 +17,8 @@ An end-to-end **UK PRA / CRR / IFRS 9 residential mortgage credit risk platform*
 
 | Store / Dataset | Scale | Storage & Git Policy |
 |---|---|---|
-| **Full Loan Performance Lake** | `57,597,528` unique loans · `3,314,483,004` monthly rows · `104` quarters (`2000Q1`–`2025Q4`) · `USD 12.63T` original UPB | `~26.04 GB` ZSTD Parquet + `~2.06 GiB` `mortgages.duckdb` *(gitignored; `--full` opt-in)* |
-| **Stratified Sample DB (`0.03%`)** | `17,275` unique loans across all `104/104` quarters · `994,063` monthly rows behind `loan_monthly_view` | `42.01 MB` `mortgages_sample.duckdb` + `26.51 MB` `module2_sample.duckdb` *(tracked in Git)* |
+| **Full Loan Performance Lake** | `57,597,528` unique loans · `3,314,483,004` monthly rows · `104` quarters (`2000Q1`–`2025Q4`) · `USD 12.63T` original UPB | `~26.04 GB` ZSTD Parquet + `~2.22 GB` `mortgages.duckdb` *(gitignored; `--full` opt-in)* |
+| **Stratified Sample DB (`0.03%`)** | `17,275` unique loans across all `104/104` quarters · `994,063` monthly rows behind `loan_monthly_view` | `44.05 MB` `mortgages_sample.duckdb` + `27.80 MB` `module2_sample.duckdb` *(tracked in Git)* |
 | **Macroeconomic & HPI Series** | `322` monthly rows (`FEDFUNDS`, `UNRATE`) · `5,406` quarterly state HPI rows (`51` states/DC, FHFA) | Stored directly in both DBs (`macro_monthly_table`, `macro_state_hpi_table`, `macro_economic_mart`) |
 
 ### Headline Portfolio Findings (`0.03%` Stratified Sample)
@@ -70,7 +70,7 @@ flowchart LR
 
 ## UK Regulatory Scope & US Data Departures
 
-Loan collateral and macro series (`FEDFUNDS`, `UNRATE`, FHFA HPI) are USD/US series evaluated under **UK PRA Rulebook** (CRR / IRB / SA / CRM effective Jan 2027), **SS11/13**, **SS4/24**, **PS9/24**, **IFRS 9**, **BoE BCST**, and **SS1/23**. All `15` mapped departures are tracked in [regulatory_parameters.py](residential_mortgage/_settings/regulatory_parameters.py):
+Loan collateral and macro series (`FEDFUNDS`, `UNRATE`, FHFA HPI) are USD/US series evaluated under **UK PRA Rulebook** (CRR / IRB / SA / CRM effective Jan 2027), **SS11/13**, **SS4/24**, **PS9/24**, **IFRS 9**, **BoE BCST**, and **SS1/23**. The platform tracks `15` documented UK-vs-US departures (full narrative register in local gitignored `docs/departures_from_uk_rules.md`; active numeric thresholds and citations in [regulatory_parameters.py](residential_mortgage/_settings/regulatory_parameters.py); LGD discount rate derivations in [03_build_macro_tables.py](residential_mortgage/00_data/scripts/03_build_macro_tables.py)):
 
 | Rule Area | UK PRA / IFRS 9 Rule | US Fannie Mae Adaptation |
 |---|---|---|
@@ -90,13 +90,13 @@ Loan collateral and macro series (`FEDFUNDS`, `UNRATE`, FHFA HPI) are USD/US ser
 |---|---|---|---|---|
 | **0** | **Data Ingestion & Sample DB** | [00_data/](residential_mortgage/00_data/) | **Complete** | 113-field layout mapper, ZSTD Parquet builder, FRED/FHFA macro + PRA discount loader, `0.03%` sample builder |
 | **1** | **Data Foundation** | [01_data_foundation/](residential_mortgage/01_data_foundation/) | **Complete (Sample)** | Leakage audit (`78` fields), feature catalogue, `02_eda.ipynb` (`8/8 PASS`), `05_observation_windows.ipynb` *(macro pub-lag enforcement open ahead of M3)* |
-| **2** | **Portfolio Analytics** | [02_portfolio_analytics/](residential_mortgage/02_portfolio_analytics/) | **Built & Verified** | `19` scripts (`00`–`18`) producing marts, snapshots, findings + `14/14` synthetic known-answer unit tests (`--full` opt-in) |
-| **3** | **Rating & PD** | [03_rating_and_pd/](residential_mortgage/03_rating_and_pd/) | **Planned** | Application & behavioural scorecards, PIT/TTC PD, 15-grade scale, Pluto-Tasche validation (`7` stubs) |
-| **4** | **LGD & EAD** | [04_lgd_ead/](residential_mortgage/04_lgd_ead/) | **Planned** | Workout & SS4/24 component LGD, `5%` floor, EL waterfall (`3` stubs) |
-| **5** | **IFRS 9 ECL** | [05_ifrs9_ecl/](residential_mortgage/05_ifrs9_ecl/) | **Planned** | Stage 1/2/3 SICR triggers, Aalen-Johansen lifetime PD, multi-scenario ECL (`5` stubs) |
-| **6** | **Basel 3.1 Capital** | [06_basel_capital/](residential_mortgage/06_basel_capital/) | **Planned** | SA loan-splitting, retail AIRB ASRF, output floor, Euler EC / RAROC (`3` stubs) |
-| **7** | **Stress Testing** | [07_stress_testing/](residential_mortgage/07_stress_testing/) | **Planned** | ARDL macro satellites, Vasicek inversion, 5y BoE BCST projection, reverse stress (`3` stubs) |
-| **8** | **Model Risk Management** | [08_model_risk_mgmt/](residential_mortgage/08_model_risk_mgmt/) | **Planned** | PRA SS1/23 / SR 11-7 inventory, conceptual soundness, monitoring (`2` stubs) |
+| **2** | **Portfolio Analytics** | [02_portfolio_analytics/](residential_mortgage/02_portfolio_analytics/) | **Built & Verified** | `19` scripts (`00`–`18`) producing marts, snapshots, findings + `14/14` synthetic known-answer unit tests (`14/14` verified post-`_settings/`; tracked `module2_sample.duckdb` generated just prior to `_settings/` move with identical SQL; `--full` opt-in) |
+| **3** | **Rating & PD** | [03_rating_and_pd/](residential_mortgage/03_rating_and_pd/) | **Planned (Stubs)** | Planned: application & behavioural scorecards, PIT/TTC PD, 15-grade scale, Pluto-Tasche validation (`7` unbuilt `sys.exit` stubs; `01`–`04` import `_settings.windows`) |
+| **4** | **LGD & EAD** | [04_lgd_ead/](residential_mortgage/04_lgd_ead/) | **Planned (Stubs)** | Planned: workout & SS4/24 component LGD, `5%` floor, EL waterfall (`3` unbuilt `sys.exit` stubs) |
+| **5** | **IFRS 9 ECL** | [05_ifrs9_ecl/](residential_mortgage/05_ifrs9_ecl/) | **Planned (Stubs)** | Planned: Stage 1/2/3 SICR triggers, Aalen-Johansen lifetime PD, multi-scenario ECL (`5` unbuilt `sys.exit` stubs) |
+| **6** | **Basel 3.1 Capital** | [06_basel_capital/](residential_mortgage/06_basel_capital/) | **Planned (Stubs)** | Planned: SA loan-splitting, retail AIRB ASRF, output floor, Euler EC / RAROC (`3` unbuilt `sys.exit` stubs) |
+| **7** | **Stress Testing** | [07_stress_testing/](residential_mortgage/07_stress_testing/) | **Planned (Stubs)** | Planned: ARDL macro satellites, Vasicek inversion, 5y BoE BCST projection, reverse stress (`3` unbuilt `sys.exit` stubs) |
+| **8** | **Model Risk Management** | [08_model_risk_mgmt/](residential_mortgage/08_model_risk_mgmt/) | **Planned (Stubs)** | Planned: PRA SS1/23 / SR 11-7 inventory, soundness, monitoring (`2` `sys.exit` stubs under `scripts/` + `02_conceptual_soundness.md` & `03_validation_reports/` placeholders at module root) |
 
 ---
 
@@ -125,8 +125,6 @@ V4_bank-credit-risk-platform/
 ├── README.md                                  # Platform overview & showcase
 ├── requirements.txt                           # Pinned Python dependencies (DuckDB 2.0.0, pandas 3.1.1, matplotlib 3.11.2, Jupyter)
 ├── .gitignore                                 # Excludes full DBs, Parquets, CSVs, .scratch/ & docs/; tracks 0.03% sample DBs & PNG charts
-├── references/
-│   └── fannie_mae_glossary_file_layout.pdf    # Official Fannie Mae 113-field layout & glossary
 └── residential_mortgage/                      # Core platform package (see residential_mortgage/README.md)
     ├── _settings/                             # paths/sampling/compute/sources.toml + config.py + regulatory_parameters.py + windows.py
     ├── 00_data/                               # Ingestion, macro tables, sample builder & module_outputs/
@@ -142,4 +140,4 @@ V4_bank-credit-risk-platform/
 | [residential_mortgage/01_data_foundation/01_ingestion_design.md](residential_mortgage/01_data_foundation/01_ingestion_design.md) | DuckDB + Parquet storage design & scan benchmarks |
 | [residential_mortgage/02_portfolio_analytics/README.md](residential_mortgage/02_portfolio_analytics/README.md) | Module 2 script-by-script reference & mart DAG (`00`–`18`) |
 | [18_portfolio_findings.md](residential_mortgage/00_data/processed/module_outputs/02_portfolio_analytics/sample/18_portfolio_findings/18_portfolio_findings.md) | Auto-generated empirical summary from Module 2 sample marts |
-| [references/fannie_mae_glossary_file_layout.pdf](references/fannie_mae_glossary_file_layout.pdf) | Source Fannie Mae 113-field schema specification |
+| `residential_mortgage/00_data/raw/fannie_mae/references/fannie_mae_glossary_file_layout.pdf` | Source Fannie Mae 113-field schema specification (local raw reference) |

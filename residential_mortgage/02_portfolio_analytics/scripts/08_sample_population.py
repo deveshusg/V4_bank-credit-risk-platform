@@ -24,6 +24,8 @@ if str(SCRIPT_DIR) not in sys.path:
 import module2_common as c  # noqa: E402
 
 
+# Summarize PD modeling population inclusions and exclusions across all December book snapshots
+# Aggregates partitioned book_snapshot Parquets by year, group, and exclusion_reason via SQL
 def run_sample_population(marts: object, outputs_dir: Path) -> int:
     """Profile PD sample inclusions and exclusions across partitioned book_snapshot."""
     check = c.Checker("08_sample_population: included vs excluded PD profile")
@@ -80,12 +82,16 @@ def run_sample_population(marts: object, outputs_dir: Path) -> int:
     return check.finish()
 
 
+# Parse CLI arguments for 08_sample_population
+# Uses module2_common.add_common_args()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Profile excluded vs included PD populations.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Connect to marts DB and generate sample_population_mart with 100% snapshot row parity
+# Validates scope consistency and asserts mart row sum matches raw book_snapshot count
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

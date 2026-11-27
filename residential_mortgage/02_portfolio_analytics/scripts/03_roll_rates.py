@@ -44,6 +44,8 @@ ALL_STATES = [
 EXIT_STATES = {"Paid off", "Credit exit", "Other exit"}
 
 
+# Apply M2-4 COVID deferral DPD hold per loan to a cohort DataFrame before roll-rate aggregation
+# Groups contiguous monthly rows by loan_id and replaces raw DPD with covid_hold_months output
 def covid_adjust_quarter_df(marts: object, quarter_parquet: Path) -> str:
     """Create TEMP TABLE _q_covid_adj (loan_id, reporting_period, adj_dpd) for relief loans in quarter."""
     fp = str(quarter_parquet).replace("\\", "/")
@@ -87,6 +89,8 @@ def covid_adjust_quarter_df(marts: object, quarter_parquet: Path) -> str:
     return "_q_covid_adj"
 
 
+# Compute count/UPB Markov transition matrices, 6-36m projections, absorption times, and EPD evidence
+# Streams quarter cohorts, builds 4 roll/Markov marts, renders 30-day backstop chart, checks bounds
 def run_roll_rates(
     marts: object,
     src_prefix: str,
@@ -192,7 +196,8 @@ def run_roll_rates(
             )
             xx_parts.append(xx_q)
 
-        # 30-day IFRS 9 backstop evidence per loan in quarter
+        # Accumulate loan-level 12m/24m default conversion rates split by first observed arrears band
+    # Tracks first Current/1m/2m observation on performing loans through t0 <= 2024-12
         ev_q = c.q(marts, f"""
             WITH st AS (
                 SELECT
@@ -292,7 +297,8 @@ def run_roll_rates(
     )
     xx_map = xx_df.set_index("era").to_dict(orient="index")
 
-    # Build long roll_rates_mart for both count and balance weights
+    # Normalize transition matrices separately by loan count and prior-month UPB balance
+    # Computes row-stochastic transition_rate values and joins excluded XX row/UPB counts
     rr_rows: list[dict] = []
     for era, g in tx_df.groupby("era"):
         xx_info = xx_map.get(era, {"xx_excluded_rows": 0, "xx_excluded_upb": 0.0})
@@ -423,12 +429,16 @@ def run_roll_rates(
     return check.finish()
 
 
+# Parse CLI arguments for 03_roll_rates
+# Delegates to module2_common.add_common_args()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Arrears roll rates, absorption and 30-day backstop.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Connect to marts and source DBs and build all Markov roll-rate and IFRS 9 backstop marts
+# Checks DB scope alignment, lists quarterly core files, and executes run_roll_rates()
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

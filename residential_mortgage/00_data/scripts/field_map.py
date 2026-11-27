@@ -1,6 +1,6 @@
 """Field map for the Fannie Mae Single-Family Loan Performance files.
 
-Source document: references/fannie_mae_glossary_file_layout.pdf
+Source document: residential_mortgage/00_data/raw/fannie_mae/references/fannie_mae_glossary_file_layout.pdf
 ("Single-Family Loan Performance Dataset and Credit Risk Transfer - Glossary and
 File Layout", version 11/9/2026). The layout lists 118 fields. The files in the zip
 carry positions 1 to 113 only; positions 114 to 118 (VantageScore 4.0 scores, Pricing
@@ -23,7 +23,8 @@ import sys
 from dataclasses import dataclass
 
 
-# One row of the layout.
+# Define an immutable specification record for one column in the Fannie Mae layout
+# Holds file position, official glossary name, DuckDB column name, SQL type, and target table
 @dataclass(frozen=True)
 class Field:
     position: int
@@ -205,45 +206,53 @@ SQL_TYPES = {
 ALLOWED_TARGETS = ["key", "loans", "loans_first", "loan_monthly", "not_loaded"]
 
 
-# Return the fields that go to one target.
+# Return all Fannie Mae layout Field records assigned to a given destination table
+# Filters the master layout tuple by matching Field.target in canonical position order
 def fields_for(target):
     return [f for f in FIELDS if f.target == target]
 
 
-# Check 1: 113 rows, positions 1..113 in order.
+# Verify that the layout covers positions 1 through 113 strictly in sequence
+# Asserts FILE_FIELDS has length 113 and its position indices equal range(1, 114)
 def check_positions():
     return [f.position for f in FIELDS] == list(range(1, 114)) and len(FIELDS) == FIELDS_IN_FILE
 
 
-# Check 2: the fields not in the files are 114..118.
+# Verify that glossary positions 114 through 118 stay isolated from CSV file reads
+# Asserts NOT_IN_FILES spans positions [114..118] and all mark target as 'not_loaded'
 def check_not_in_files():
     return [p for p, _, _ in NOT_IN_FILES] == [114, 115, 116, 117, 118]
 
 
-# Check 3: column names unique, lowercase letters, digits and underscores only.
+# Validate that loaded DuckDB column names are unique and strictly snake_case
+# Checks uniqueness across loaded fields and matches each name against ^[a-z][a-z0-9_]*$
 def check_column_names():
     names = [f.column for f in FIELDS]
     allowed = set("abcdefghijklmnopqrstuvwxyz0123456789_")
     return len(set(names)) == len(names) and all(n and set(n) <= allowed for n in names)
 
 
-# Check 4: every dtype is known and every target is allowed.
+# Confirm every mapped column declares a recognized SQL dtype and routing target
+# Checks dtype membership in DUCKDB_TYPES and target membership in the allowed target set
 def check_types_and_targets():
     return all(f.dtype in SQL_TYPES and f.target in ALLOWED_TARGETS for f in FIELDS)
 
 
-# Check 5: the not_loaded positions are exactly the Single-Family NA positions.
+# Verify that excluded Single-Family NA positions exactly match the glossary specification
+# Compares positions tagged target='not_loaded' against the expected NOT_LOADED_POSITIONS tuple
 def check_not_loaded():
     not_loaded = sorted(f.position for f in fields_for("not_loaded"))
     return not_loaded == sorted(NOT_FOR_SINGLE_FAMILY)
 
 
-# Check 6: positions 2 and 3 are the only key fields.
+# Confirm that loan_id and reporting_period are the sole primary key columns
+# Checks that positions 2 and 3 carry the 'key' designation across FILE_FIELDS
 def check_keys():
     return [f.position for f in fields_for("key")] == [2, 3]
 
 
-# Run the checks, print PASS or FAIL for each, then the count per target.
+# Run all six layout integrity self-checks and print per-target column counts
+# Executes every check_* function in order and returns exit status 1 if any assertion fails
 def main():
     checks = [
         ("113 rows, positions 1 to 113 in order", check_positions),

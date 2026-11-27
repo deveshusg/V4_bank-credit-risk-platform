@@ -26,6 +26,8 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import pandas as pd
 
+# Make shared Module 2 helpers importable
+# Resolve this script's folder and prepend it to Python's module search path
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
@@ -33,9 +35,13 @@ if str(SCRIPT_DIR) not in sys.path:
 import module2_common as c  # noqa: E402
 
 
+# Build the three per-quarter SQL queries (monthly flows, yearly coverage, and loan lifespan checks)
+# Wrap one core Parquet file in a shared prior/next-month window CTE and return three SELECT strings
 def audit_quarter_sql(parquet_path: Path, dataset_end_iso: str) -> tuple[str, str, str]:
     """Return SQL queries for monthly flow, yearly plausibility, and loan-level flags on one quarter."""
     fp = str(parquet_path).replace("\\", "/")
+    # Line up each loan-month with its prior and next month
+    # Partition by loan_id ordered by reporting_period using DuckDB LAG/LEAD window functions
     cte = f"""
         WITH ordered AS (
             SELECT
@@ -66,6 +72,8 @@ def audit_quarter_sql(parquet_path: Path, dataset_end_iso: str) -> tuple[str, st
             WINDOW w AS (PARTITION BY loan_id ORDER BY reporting_period)
         ),
         classified AS (
+            -- Tag each row's transition role (entry, exit, smooth continuation, gap, or early unmasking)
+            -- Compare reporting_period gaps via datediff('month', ...) and check zero_balance_code / prev_upb
             SELECT *,
                 (prev_rp IS NULL) AS is_first,
                 (next_rp IS NULL) AS is_last,
@@ -81,6 +89,8 @@ def audit_quarter_sql(parquet_path: Path, dataset_end_iso: str) -> tuple[str, st
         )
     """
     monthly_sql = cte + f"""
+        -- Aggregate same-month active loan counts, inflows, principal repayments, capitalisations, and exits
+        -- Group classified rows by reporting_period using FILTER clauses (counting cap_added_upb only when total_principal is blank)
         , same_month_events AS (
             SELECT
                 reporting_period,
@@ -104,7 +114,7 @@ def audit_quarter_sql(parquet_path: Path, dataset_end_iso: str) -> tuple[str, st
                 ), 0.0) AS inferred_principal_upb,
                 COALESCE(sum(GREATEST(COALESCE(current_upb, 0.0) - prev_upb, 0.0)) FILTER (
                     WHERE is_contig_prev AND zero_balance_code IS NULL AND prev_zbc IS NULL
-                      AND NOT is_unmask_jump
+                      AND total_principal IS NULL AND NOT is_unmask_jump
                 ), 0.0) AS cap_added_upb,
                 COALESCE(sum(COALESCE(mod_non_interest_upb, 0.0) - COALESCE(prev_mod_non_int, 0.0)) FILTER (
                     WHERE is_contig_prev AND zero_balance_code IS NULL
@@ -120,6 +130,8 @@ def audit_quarter_sql(parquet_path: Path, dataset_end_iso: str) -> tuple[str, st
             FROM classified
             GROUP BY reporting_period
         ),
+        -- Attribute mid-life disappearances and early no-exit stops to the next reporting month
+        -- Shift reporting_period forward by INTERVAL 1 MONTH for rows where the loan drops out without an exit code
         next_month_drops AS (
             SELECT
                 CAST(reporting_period + INTERVAL 1 MONTH AS DATE) AS reporting_period,
@@ -130,6 +142,8 @@ def audit_quarter_sql(parquet_path: Path, dataset_end_iso: str) -> tuple[str, st
             FROM classified
             GROUP BY 1
         )
+        -- Align same-month events with next-month drops into one monthly ledger row
+        -- Full-outer-join both CTEs on reporting_period and zero-fill missing counts or balances with COALESCE
         SELECT
             COALESCE(s.reporting_period, n.reporting_period) AS reporting_period,
             COALESCE(s.open_loans, 0)::BIGINT AS open_loans,
@@ -163,6 +177,8 @@ def audit_quarter_sql(parquet_path: Path, dataset_end_iso: str) -> tuple[str, st
         WHERE COALESCE(s.reporting_period, n.reporting_period) <= DATE '{dataset_end_iso}'
     """
 
+    # Summarize yearly reporting coverage, relief flags, invalid values, and unexplained arrears resets
+    # Group classified rows by calendar year and count each quality indicator with conditional FILTER clauses
     yearly_sql = cte + """
         SELECT
             year(reporting_period)::VARCHAR AS year,
@@ -185,6 +201,8 @@ def audit_quarter_sql(parquet_path: Path, dataset_end_iso: str) -> tuple[str, st
         GROUP BY 1
     """
 
+    # Check each loan's full lifespan for skipped months, duplicates, early stops, and servicer switches
+    # Collapse each loan_id to its min/max dates and compare observed row count against expected month span
     loan_summary_sql = cte + f"""
         , per_loan AS (
             SELECT
@@ -209,6 +227,8 @@ def audit_quarter_sql(parquet_path: Path, dataset_end_iso: str) -> tuple[str, st
     return monthly_sql, yearly_sql, loan_summary_sql
 
 
+# Execute the full portfolio balance and data-health audit across all 104 quarters
+# Scan each core Parquet file, roll up monthly/yearly/loan summaries, save two marts and two charts, and verify 7 alarms
 def run_audit(
     marts: object,
     src_prefix: str,
@@ -221,6 +241,8 @@ def run_audit(
     t0 = time.time()
     check = c.Checker("01_data_audit: roll-forward and plausibility")
 
+    # Accumulate monthly flows, yearly health counts, and loan lifespan totals across all quarters
+    # Execute the three SQL queries per core Parquet file and append each result to in-memory lists/counters
     monthly_parts: list[pd.DataFrame] = []
     yearly_parts: list[pd.DataFrame] = []
     loan_totals = {"total_loans": 0, "gap_loans": 0, "dup_loans": 0, "early_noexit_loans": 0, "multi_servicer_loans": 0}
@@ -238,7 +260,8 @@ def run_audit(
         if idx % 20 == 0 or idx == len(core_files):
             print(f"  [{idx:3d}/{len(core_files)}] scanned {f.stem} ({time.time() - t0:.1f}s)", flush=True)
 
-    # Combine monthly accumulators
+    # Combine quarterly flow tables into a single 312-month portfolio timeline
+    # Concatenate all DataFrames, sum numeric columns by reporting_period, and sort chronologically
     df = (
         pd.concat(monthly_parts, ignore_index=True)
         .groupby("reporting_period", as_index=False)
@@ -246,6 +269,8 @@ def run_audit(
         .sort_values("reporting_period")
         .reset_index(drop=True)
     )
+    # Reconcile active loan counts month over month
+    # Shift prior closing open_loans forward by 1 row and subtract opening + inflows - outflows from open_loans
     df["opening_loans"] = df["open_loans"].shift(1).fillna(0).astype("int64")
     df["count_residual"] = df["open_loans"] - (
         df["opening_loans"]
@@ -255,6 +280,8 @@ def run_audit(
         - df["gap_disappear"]
         - df["early_noexit"]
     )
+    # Reconcile Unpaid Principal Balance (UPB) and isolate any unexplained monthly residual
+    # Shift closing_upb forward for opening_upb, sum reported + inferred principal, and compute closing minus expected
     df["opening_upb"] = df["closing_upb"].shift(1).fillna(0.0)
     df["principal_paid_eff_upb"] = df["reported_principal_paid_upb"] + df["inferred_principal_upb"]
     df["unexplained_upb"] = df["closing_upb"] - (
@@ -275,9 +302,12 @@ def run_audit(
         df["unexplained_upb"] / df["closing_upb"].replace(0.0, float("nan")) * 100.0
     ).fillna(0.0)
 
+    # Persist the monthly balance roll-forward bridge in DuckDB
+    # Write df via module2_common.write_df keyed by reporting_period
     c.write_df(marts, "balance_rollforward_mart", df, ["reporting_period"])
 
-    # Combine yearly plausibility accumulators
+    # Combine yearly plausibility counts across all 104 quarters
+    # Concatenate yearly_parts, sum by calendar year, and flatten portfolio loan totals into long-form rows
     ydf = (
         pd.concat(yearly_parts, ignore_index=True)
         .groupby("year", as_index=False)
@@ -289,7 +319,8 @@ def run_audit(
     for k, v in loan_totals.items():
         plaus_rows.append({"check_scope": "portfolio_loans", "metric_name": k, "year": "ALL", "value": float(v), "share_pct": 100.0 * v / max(loan_totals["total_loans"], 1)})
 
-    # Origination range & null checks directly from loans_table (DuckDB SQL)
+    # Check origination data completeness and valid value bounds
+    # Query loans_table directly in DuckDB for null FICO/DTI/first-payment dates and out-of-range LTV/UPB
     where_l = c.scope(sample_filter, prefix=src_prefix) if src_prefix else "TRUE"
     orig_tbl = f"{src_prefix}loans_table"
     orig_stats = marts.execute(f"""
@@ -307,7 +338,8 @@ def run_audit(
     for m_name, cnt in zip(["invalid_orig_ltv_loans", "null_dti_loans", "null_fico_loans", "invalid_orig_upb_loans", "null_first_payment_loans"], orig_stats[1:]):
         plaus_rows.append({"check_scope": "origination", "metric_name": m_name, "year": "ALL", "value": float(cnt), "share_pct": 100.0 * cnt / loans_n})
 
-    # Re-aging total & negative UPB
+    # Compute portfolio-wide totals for re-aging, negative UPB, and invalid interest rates
+    # Sum yearly flags across all years and append overall row shares to the plausibility list
     total_reaging = int(ydf["reaging_events"].sum())
     total_neg_upb = int(ydf["negative_upb_rows"].sum())
     total_bad_rate = int(ydf["invalid_rate_rows"].sum())
@@ -315,6 +347,8 @@ def run_audit(
     plaus_rows.append({"check_scope": "monthly_rows", "metric_name": "negative_upb_rows", "year": "ALL", "value": float(total_neg_upb), "share_pct": 100.0 * total_neg_upb / max(int(ydf["total_rows"].sum()), 1)})
     plaus_rows.append({"check_scope": "monthly_rows", "metric_name": "invalid_rate_rows", "year": "ALL", "value": float(total_bad_rate), "share_pct": 100.0 * total_bad_rate / max(int(ydf["total_rows"].sum()), 1)})
 
+    # Build yearly percentage trend rows and persist the data plausibility scorecard
+    # Divide each yearly metric by total or active rows and write data_plausibility_mart to DuckDB
     for _, r in ydf.iterrows():
         tot = max(float(r["total_rows"]), 1.0)
         act = max(float(r["active_rows"]), 1.0)
@@ -337,7 +371,8 @@ def run_audit(
     pdf_out = pd.DataFrame(plaus_rows)
     c.write_df(marts, "data_plausibility_mart", pdf_out, ["check_scope", "metric_name", "year"])
 
-    # Charts (300 dpi, labelled axes with units)
+    # Render the latest month's balance roll-forward waterfall chart in USD billions
+    # Stack positive and negative component bars sequentially and save to outputs_dir at 300 dpi
     if len(df) > 0:
         last = df.iloc[-1]
         steps = [
@@ -366,6 +401,8 @@ def run_audit(
         plt.xticks(rotation=25, ha="right")
         c.save_chart(fig, c.script_out(outputs_dir, "01_data_audit") / "01_balance_waterfall.png")
 
+    # Render the 26-year servicer field coverage and early balance masking chart
+    # Plot yearly percentages for principal fill, masked $0 UPB, and blank DPD and save at 300 dpi
     if len(ydf) > 0:
         fig, ax = plt.subplots(figsize=(11, 4.8))
         ax.plot(ydf["year"], 100.0 * ydf["total_principal_filled_rows"] / ydf["total_rows"].clip(lower=1), label="total_principal filled (%)")
@@ -378,11 +415,15 @@ def run_audit(
         ax.legend()
         c.save_chart(fig, c.script_out(outputs_dir, "01_data_audit") / "01_fill_rates.png")
 
+    # Evaluate all 7 automated audit alarms and verify primary keys on both output marts
+    # Compute worst-case residuals across 312 months and register pass/fail assertions via Checker
     max_count_res = int(df["count_residual"].abs().max()) if len(df) > 0 else 0
     nan_count = int(df[["opening_upb", "closing_upb", "unexplained_upb"]].isna().sum().sum())
     max_abs_unexp = float(df["unexplained_upb"].abs().max()) if len(df) > 0 else 0.0
+    max_unexp_pct = float(df["unexplained_pct_of_closing"].abs().max()) if len(df) > 0 else 0.0
     check.add("active loan count roll-forward ties exactly every month", max_count_res == 0, f"max_abs_residual={max_count_res}")
     check.add("zero NaN values in balance roll-forward columns", nan_count == 0, f"nan_cells={nan_count}")
+    check.add("unexplained UPB < 0.01% of closing UPB every month", max_unexp_pct < 0.01, f"max_abs_pct={max_unexp_pct:.6f}% (max_abs_upb={max_abs_unexp:,.2f})")
     check.add("zero duplicate monthly rows per loan", loan_totals["dup_loans"] == 0, f"dup_loans={loan_totals['dup_loans']}")
     check.add("zero negative UPB rows", total_neg_upb == 0, f"negative_upb_rows={total_neg_upb}")
     check.key(marts, "balance_rollforward_mart", ["reporting_period"])
@@ -397,12 +438,16 @@ def run_audit(
     return check.finish()
 
 
+# Define command-line flags (--sample/--full and custom path overrides)
+# Build an ArgumentParser and attach shared Module 2 options via module2_common.add_common_args
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Balance roll-forward and plausibility audit.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Run the audit script from end to end and return a pass/fail exit code
+# Resolve sample vs. full paths, connect to marts DB, attach source DB, run audit, and close connection
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

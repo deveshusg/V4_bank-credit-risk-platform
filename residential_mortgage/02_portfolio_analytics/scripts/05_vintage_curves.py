@@ -33,6 +33,8 @@ if str(SCRIPT_DIR) not in sys.path:
 import module2_common as c  # noqa: E402
 
 
+# Compute Aalen-Johansen competing-risk survival, default CIF, payoff CIF, SMM, and CPR by MOB
+# Applies discrete-time hazard multiplication: dCIF(t) = S(t-1) * h_cause(t) so CIF sums stay <= 1
 def compute_aalen_johansen(g: pd.DataFrame) -> pd.DataFrame:
     """Compute discrete Aalen-Johansen CIF_default, CIF_payoff, and conditional flags on ordered mob."""
     g = g.sort_values("mob").copy()
@@ -74,6 +76,8 @@ def compute_aalen_johansen(g: pd.DataFrame) -> pd.DataFrame:
     return g
 
 
+# Stream cohort-months-on-book exposure, build competing-risk vintage marts, and plot CIF chart
+# Aggregates quarterly at-risk/default/payoff counts in DuckDB and validates CIF & SMM bounds
 def run_vintage_curves(
     marts: object,
     src_prefix: str,
@@ -276,7 +280,8 @@ def run_vintage_curves(
     life_out = pd.DataFrame(life_rows)
     c.write_df(marts, "loan_lifetime_mart", life_out, ["segment", "era", "seasoned_bucket"])
 
-    # Chart (300 dpi): Headline acquisition_quarter cumulative default incidence by era
+    # Aggregate acquisition-cohort exposure by macroeconomic era and plot Aalen-Johansen CIFs
+    # Saves high-resolution PNG via module2_common.save_chart() and validates CIF/SMM bounds
     if not acq_only.empty:
         fig, ax = plt.subplots(figsize=(10, 5))
         era_mob = (
@@ -302,12 +307,16 @@ def run_vintage_curves(
     return check.finish()
 
 
+# Parse CLI arguments for 05_vintage_curves
+# Attaches common Module 2 sample/--full and path arguments
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Vintage competing-risk default and prepayment curves.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Attach source DB and run competing-risk vintage curve and lifetime mart generation
+# Validates DB scope match and executes run_vintage_curves() cleanly
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

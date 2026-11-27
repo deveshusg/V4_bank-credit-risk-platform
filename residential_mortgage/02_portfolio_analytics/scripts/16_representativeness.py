@@ -40,6 +40,8 @@ DRIVER_BINS = {
 }
 
 
+# Compare historical training windows against Dec 2025 via PSI and catalog known Category A/B limits
+# Evaluates 8 underwriting drivers across pre-2022/pre-2025 vs today and quantifies data gaps
 def run_representativeness(
     marts: object,
     src_prefix: str,
@@ -186,12 +188,16 @@ def run_representativeness(
     return check.finish()
 
 
+# Parse CLI arguments for 16_representativeness
+# Uses module2_common.add_common_args()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Representativeness PSI, baseline shares and Category A/B MoC.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Connect to marts/source DBs and generate representativeness_mart and data_limits_mart
+# Verifies scope match, runs PSI & limitation audits, and exits with check status
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

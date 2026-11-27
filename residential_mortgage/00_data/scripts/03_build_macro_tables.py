@@ -91,6 +91,8 @@ EXPECTED_HEADERS = {
 }
 
 
+# Build active download URL map for FRED rates, unemployment, and FHFA house price indices
+# Substitutes configured national HPI release suffix into raw filenames dynamically
 def source_urls() -> dict:
     """File name -> URL. Read at call time so tests can change the constants."""
     return {
@@ -103,6 +105,8 @@ def source_urls() -> dict:
 # ---------------------------------------------------------------------------------------
 # Raw files and downloads
 # ---------------------------------------------------------------------------------------
+# Validate the first CSV header line of a downloaded macro file before promoting it
+# Reads line 1 UTF-8 text and compares via equals or startswith against RAW_FILE_CHECKS
 def first_line_ok(path: Path, filename: str) -> bool:
     """True if the first line of the file is the expected header."""
     header, mode = EXPECTED_HEADERS[filename]
@@ -114,6 +118,8 @@ def first_line_ok(path: Path, filename: str) -> bool:
     return line == header if mode == "equals" else line.startswith(header)
 
 
+# Fetch a macro series CSV via urllib into a staging temporary path
+# Streams network response in 64 KB chunks using a browser user-agent header and timeout
 def download_to_temp(url: str, dest: Path) -> Path:
     """Download url to a .tmp file next to dest. Return the .tmp path or exit 1."""
     tmp = dest.with_name(dest.name + ".tmp")
@@ -133,6 +139,8 @@ def download_to_temp(url: str, dest: Path) -> Path:
     return tmp
 
 
+# Guarantee all four raw macro CSVs exist locally and pass header checks
+# Downloads any missing files (or all on --force-download) to temp, verifies headers, then swaps
 def ensure_macro_sources(macro_dir: Path, force_download: bool = False):
     """Make sure the raw files exist. Download only when --force-download is given."""
     urls = source_urls()
@@ -164,6 +172,8 @@ def ensure_macro_sources(macro_dir: Path, force_download: bool = False):
             print(f"  Saved {name} ({dest.stat().st_size:,} bytes)")
 
 
+# Execute a one-value SQL lookup against DuckDB and return its top-left field
+# Calls fetchone() on con.execute(sql, params) safely
 def scalar(con, sql: str, params=None):
     """Run a query and return a single value."""
     return con.execute(sql, params or []).fetchone()[0]
@@ -172,6 +182,8 @@ def scalar(con, sql: str, params=None):
 # ---------------------------------------------------------------------------------------
 # Checks
 # ---------------------------------------------------------------------------------------
+# Run six completeness, timeliness, key, state-grid, and discount-rate validation checks
+# Verifies continuous dates from 2000-01, lag ceilings, 51 state series, and downturn bounds
 def run_checks(con) -> list[tuple[int, str, bool, str]]:
     """Run the 6 checks against the 5 macro tables. Return (number, title, ok, detail)."""
     results = []
@@ -357,6 +369,8 @@ SOURCE_NOTES = [
 ]
 
 
+# Transform raw FRED and FHFA CSVs into monthly/quarterly macro tables and LGD discount marts
+# Creates clean calendar tables, computes 1m/12m shifts inside a transaction, and validates checks
 def build_macro_tables(con, macro_dir: Path):
     """Build the tables and views, run the checks, commit only if all pass.
 
@@ -557,6 +571,8 @@ def build_macro_tables(con, macro_dir: Path):
         raise
 
 
+# Parse macro pipeline flags, sync raw CSV inputs, populate DuckDB tables, and print diagnostics
+# Updates either sample or --full mortgages DuckDB cleanly and rolls back on any failed check
 def main():
     parser = argparse.ArgumentParser(description="Build the macroeconomic tables in DuckDB.")
     parser.add_argument("--db", default=None, help="Target DuckDB file (overrides default sample / --full)")

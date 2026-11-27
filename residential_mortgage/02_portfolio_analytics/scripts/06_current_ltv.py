@@ -30,6 +30,8 @@ if str(SCRIPT_DIR) not in sys.path:
 import module2_common as c  # noqa: E402
 
 
+# Detect peak-to-trough house price decline episodes of at least 3% in one state's HPI series
+# Tracks running highs and troughs chronologically and records duration, fall %, and dates
 def compute_drawdown_episodes(hpi_df: pd.DataFrame) -> pd.DataFrame:
     """Detect distinct peak-to-trough drawdown episodes per state using running historical max."""
     rows: list[dict] = []
@@ -129,6 +131,8 @@ def compute_drawdown_episodes(hpi_df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+# Construct unified state+national HPI lookup SQL view clamped at 2000Q1 for pre-2000 loans
+# Creates TEMP TABLE _hpi_q adding equal-weighted national average row for US territories
 def build_hpi_lookup_sql(src_prefix: str) -> str:
     """Create state + territory HPI quarterly series starting 2000Q1 in marts DB."""
     return f"""
@@ -149,6 +153,8 @@ def build_hpi_lookup_sql(src_prefix: str) -> str:
     """
 
 
+# Build origination property values, state HPI drawdowns, and indexed vs downward current LTV marts
+# Combines scheduled UPB fallback with quarterly FHFA indexation and plots top 15 HPI falls
 def run_current_ltv(
     marts: object,
     src_prefix: str,
@@ -294,7 +300,8 @@ def run_current_ltv(
     cltv_df["mean_ltv_upb_weighted"] = cltv_df["weighted_ltv_num"] / cltv_df["balance"].replace(0.0, np.nan)
     c.write_df(marts, "current_ltv_mart", cltv_df, ["quarter_date", "segment", "ltv_type", "ltv_band"])
 
-    # Chart (300 dpi): Top 15 state peak-to-trough house price drawdowns
+    # Rank US states by worst historical HPI drop and save horizontal benchmark chart
+    # Marks 10% SA revaluation, 25% LGD floor, and 40% downturn thresholds at 300 dpi
     if not ep_df.empty:
         max_state = (
             ep_df.groupby("state", as_index=False)["fall_pct"]
@@ -335,12 +342,16 @@ def run_current_ltv(
     return check.finish()
 
 
+# Parse CLI arguments for 06_current_ltv
+# Uses module2_common.add_common_args()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Indexed & downward-only current LTV and state HPI falls.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Open marts DB, attach source DB read-only, and build indexed/downward LTV analytics
+# Enforces scope consistency and runs run_current_ltv() across all core partitions
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

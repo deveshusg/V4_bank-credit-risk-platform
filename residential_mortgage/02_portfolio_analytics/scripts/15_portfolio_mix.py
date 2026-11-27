@@ -32,6 +32,8 @@ if str(SCRIPT_DIR) not in sys.path:
 import module2_common as c  # noqa: E402
 
 
+# Compute historical portfolio mix, HHI concentration, EPD-3 seller defects, and arrears bounce
+# Aggregates book_snapshot mix/HHI with core EPD-3/oscillation scans and checks [0,1] HHI bounds
 def run_portfolio_mix(
     marts: object,
     src_prefix: str,
@@ -48,7 +50,8 @@ def run_portfolio_mix(
     if not list(snap_dir.glob("year=*/*.parquet")):
         raise FileNotFoundError("book_snapshot Parquet files missing; run 07_default_rate_history.py first")
 
-    # 1. Book mix over time across portfolio_total, occupancy, num_units, sa_ltv_band
+    # Measure annual December portfolio composition and weighted-average underwriting metrics
+    # Aggregates loans, UPB, FICO, LTV, DTI, and note rate across four mix dimensions in SQL
     mix_df = c.q(marts, f"""
         WITH s AS (
             SELECT
@@ -100,7 +103,8 @@ def run_portfolio_mix(
     """)
     c.write_df(marts, "portfolio_mix_mart", mix_df, ["snapshot_year", "dimension", "bucket"])
 
-    # 2. Concentration HHI by property_state, msa (excluding '00000' / blank), and seller_name
+    # Compute Herfindahl-Hirschman concentration indices (HHI) across states, MSAs, and sellers
+    # Tracks entity diversity alongside unmapped/non-MSA balance shares per snapshot year
     conc_df = c.q(marts, f"""
         WITH yr_tot AS (
             SELECT year(snapshot_date)::INTEGER AS snapshot_year, sum(current_upb) AS tot_upb
@@ -152,7 +156,8 @@ def run_portfolio_mix(
     """)
     c.write_df(marts, "concentration_mart", conc_df, ["snapshot_year", "concentration_dim"])
 
-    # 3. Early Payment Default (EPD-3) and contiguous 0->1->0 arrears bounce per quarter
+    # Scan monthly core partitions for 90-day early payment defaults and contiguous 0->1->0 bounces
+    # Writes early_payment_default_mart by cohort/seller and arrears_bounce_mart by year/segment
     epd_parts: list[pd.DataFrame] = []
     bnc_parts: list[pd.DataFrame] = []
     for idx, f in enumerate(core_files, 1):
@@ -269,12 +274,16 @@ def run_portfolio_mix(
     return check.finish()
 
 
+# Parse CLI arguments for 15_portfolio_mix
+# Uses module2_common.add_common_args()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Portfolio mix, concentration, EPD-3 and arrears bounce.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Connect to marts/source DBs and generate portfolio mix, concentration, EPD, and bounce marts
+# Verifies scope match and executes run_portfolio_mix() cleanly
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

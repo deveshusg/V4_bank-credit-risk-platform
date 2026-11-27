@@ -3,7 +3,7 @@
 [← Back to Platform Showcase](../README.md) · [_settings/](_settings/) · [Module 0 Guide](00_data/README.md) · [Ingestion Design](01_data_foundation/01_ingestion_design.md) · [Module 2 DAG](02_portfolio_analytics/README.md)
 
 > [!NOTE]
-> **Sample-First Default (`0.03%` Stratified DB):** Every script and notebook runs against the self-contained [mortgages_sample.duckdb](00_data/processed/module_outputs/00_data/mortgages_sample.duckdb) (`42.01 MB`, `17,275` loans across `104/104` quarters) and writes into isolated `sample/` folders under `00_data/processed/module_outputs/`. Passing `--full` (or `EDA_FULL='1'` / `WIN_FULL='1'`) switches to full `mortgages.duckdb` (`full/` outputs) using the exact same SQL and business logic.
+> **Sample-First Default (`0.03%` Stratified DB):** Every script and notebook runs against the self-contained [mortgages_sample.duckdb](00_data/processed/module_outputs/00_data/mortgages_sample.duckdb) (`44.05 MB`, `17,275` loans across `104/104` quarters) and writes into isolated `sample/` folders under `00_data/processed/module_outputs/`. Passing `--full` (or `EDA_FULL='1'` / `WIN_FULL='1'`) switches to full `mortgages.duckdb` (`full/` outputs) using the exact same SQL and business logic.
 
 ---
 
@@ -18,20 +18,20 @@ residential_mortgage/
 │   ├── compute.toml             # DuckDB RAM/thread limits (6GB/8GB, 4 threads), zip chunk size & 300 DPI charts
 │   ├── sources.toml             # Acquisition quarter range (2000Q1–2025Q4) & FRED/FHFA endpoints/known gaps
 │   ├── config.py                # TOML loader & sample/full path resolution helpers
-│   ├── regulatory_parameters.py # Single source of truth for PRA/FCA thresholds & departures
+│   ├── regulatory_parameters.py # Single source of truth for M2 PRA/FCA thresholds & citations (M3–M7 placeholders; full 15 departures in local docs/)
 │   └── windows.py               # Canonical observation, performance, seasoning, probation & projection windows
 ├── 00_data/                     # Base ingestion, macro tables, 0.03% sample builder & centralized module_outputs/
 ├── 01_data_foundation/          # Leakage quarantine, feature catalogue & EDA/window notebooks
 ├── 02_portfolio_analytics/      # 19-script analytics pipeline (run_module2.py) & 14 synthetic unit tests
-├── 03_rating_and_pd/            # Module 3 stubs (7 scripts)
-├── 04_lgd_ead/                  # Module 4 stubs (3 scripts)
-├── 05_ifrs9_ecl/                # Module 5 stubs (5 scripts)
-├── 06_basel_capital/            # Module 6 stubs (3 scripts)
-├── 07_stress_testing/           # Module 7 stubs (3 scripts)
-└── 08_model_risk_mgmt/          # Module 8 stubs & governance templates
+├── 03_rating_and_pd/            # Module 3 planned stubs (7 unbuilt scripts; 01–04 import _settings.windows)
+├── 04_lgd_ead/                  # Module 4 planned stubs (3 unbuilt scripts)
+├── 05_ifrs9_ecl/                # Module 5 planned stubs (5 unbuilt scripts)
+├── 06_basel_capital/            # Module 6 planned stubs (3 unbuilt scripts)
+├── 07_stress_testing/           # Module 7 planned stubs (3 unbuilt scripts)
+└── 08_model_risk_mgmt/          # Module 8 planned stubs (2 scripts) + root placeholders (02_conceptual_soundness.md, 03_validation_reports/)
 ```
 
-Every numbered module (`00_data` through `08_model_risk_mgmt`) follows one consistent internal structure:
+Modules `00_data` through `07_stress_testing` follow a uniform internal structure (`08_model_risk_mgmt/` also places `02_conceptual_soundness.md` and `03_validation_reports/README.md` at module root):
 - `scripts/` — sequentially numbered runnable Python scripts (`01_...`, `02_...`)
 - `notebooks/` — Jupyter `.ipynb` exploratory and validation workbooks
 - `tests/` — synthetic known-answer unit test suites
@@ -54,8 +54,8 @@ Every numbered module (`00_data` through `08_model_risk_mgmt`) follows one consi
 
 | Mode | Trigger | Base DB Read | Module 2 Mart DB | Outputs Path |
 |---|---|---|---|---|
-| **Sample (Default)** | *(no flag)* / `EDA_FULL='0'` | `mortgages_sample.duckdb` (`42.01 MB`) | `module2_sample.duckdb` (`26.51 MB`) | `00_data/processed/module_outputs/<module>/sample/<script>/` |
-| **Full (Opt-In)** | `--full` / `EDA_FULL='1'` | `mortgages.duckdb` (`~2.06 GiB` + Parquet lake) | `module2.duckdb` | `00_data/processed/module_outputs/<module>/full/<script>/` |
+| **Sample (Default)** | *(no flag)* / `EDA_FULL='0'` | `mortgages_sample.duckdb` (`44.05 MB`) | `module2_sample.duckdb` (`27.80 MB`) | `00_data/processed/module_outputs/<module>/sample/<script>/` |
+| **Full (Opt-In)** | `--full` / `EDA_FULL='1'` | `mortgages.duckdb` (`~2.22 GB` + Parquet lake) | `module2.duckdb` | `00_data/processed/module_outputs/<module>/full/<script>/` |
 
 ---
 
@@ -112,9 +112,11 @@ $env:EDA_FULL = '0'
 
 See [02_portfolio_analytics/README.md](02_portfolio_analytics/README.md) for the script-by-script table and mart dependencies.
 
+> **Artifact note:** `test_module2.py` (`14/14 OK`) ran after the `_settings/` migration; the tracked `module2_sample.duckdb` and `18_portfolio_findings.md` were generated right before the `settings/` -> `_settings/` rename using identical SQL/logic (re-run `run_module2.py` to refresh build timestamps).
+
 ### Modules 3 to 8 (`03_rating_and_pd/` – `08_model_risk_mgmt/`)
 
-Scaffolded with standard `scripts/`, `notebooks/`, `tests/`, and `docs/` folders. All scripts resolve inputs and thresholds from `_settings/` (`from _settings import config, windows`). Execution commands will be added here as each module moves from stub to implementation.
+Scaffolded as `sys.exit("Not built yet")` placeholders awaiting design sign-off (`03_rating_and_pd/scripts/01`–`04` import `_settings.windows`; the remaining `19` stubs across `03_rating_and_pd/05`–`07` and `04`–`08` have no `_settings/` wiring yet). Execution commands will be added here as each module moves from stub to implementation.
 
 ---
 
@@ -125,7 +127,7 @@ All built artifacts write inside `00_data/processed/module_outputs/`:
 ```text
 00_data/processed/module_outputs/
 ├── 00_data/
-│   └── mortgages_sample.duckdb                         # Tracked (42.01 MB standalone 0.03% DB)
+│   └── mortgages_sample.duckdb                         # Tracked (44.05 MB standalone 0.03% DB)
 ├── 01_data_foundation/
 │   ├── sample/
 │   │   ├── 02_eda/{charts/*.png, tables/*.csv}         # PNG charts tracked; CSV tables gitignored
@@ -134,7 +136,7 @@ All built artifacts write inside `00_data/processed/module_outputs/`:
 │   └── full/                                           # Entirely gitignored
 └── 02_portfolio_analytics/
     ├── sample/
-    │   ├── module2_sample.duckdb                       # Tracked (26.51 MB sample marts)
+    │   ├── module2_sample.duckdb                       # Tracked (27.80 MB sample marts)
     │   ├── 00_build_monthly_core/*.parquet             # Ignored (104 typed Parquets)
     │   ├── {01..13}_*/ *.png                           # Tracked (8 analytical PNG charts)
     │   ├── {07_default_rate_history,09_risk_drivers}/book_snapshot*/ # Ignored Parquets

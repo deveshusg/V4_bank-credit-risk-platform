@@ -64,15 +64,21 @@ COPY_FULL_TABLES: tuple[str, ...] = (
 )
 
 
+# Execute a single-row SQL aggregate and return its scalar result
+# Runs con.execute(sql, params).fetchone() cleanly
 def scalar(con: duckdb.DuckDBPyConnection, sql: str, params=None):
     row = con.execute(sql, params or []).fetchone()
     return row[0] if row else None
 
 
+# Normalize raw Parquet text fields by stripping whitespace and converting blanks to NULL
+# Wraps expression with nullif(trim(expr), '') in SQL
 def _sql_text(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
+# Generate DuckDB SQL cast expression converting one raw Parquet string field to typed column
+# Selects DECIMAL, INTEGER, DATE, BOOLEAN, or MMYYYY strptime rules from field.dtype
 def _convert_expr(field) -> str:
     if field.dtype == "text":
         return field.column
@@ -81,6 +87,8 @@ def _convert_expr(field) -> str:
     return f"TRY_CAST({field.column} AS {SQL_TYPES[field.dtype]})"
 
 
+# Generate full 84-column typed projection SQL used to slice raw Parquet into sample_monthly
+# Maps acquisition_quarter literal plus all non-'not_loaded' fields in layout order
 def _monthly_select_exprs(quarter: str) -> str:
     """Match exact 43 columns and types of 02_build_base_tables.update_loan_monthly_view."""
     cols = [
@@ -100,6 +108,8 @@ def _monthly_select_exprs(quarter: str) -> str:
     return ", ".join(cols)
 
 
+# Build a self-contained deterministic 0.03% stratified sample DuckDB in an atomic temp file
+# Samples loans_table per quarter with seed, copies full monthly & macro histories, verifies parity
 def build_sample_database(
     full_db: Path,
     sample_db: Path,
@@ -281,6 +291,8 @@ def build_sample_database(
     return True, stats
 
 
+# Parse CLI arguments and launch deterministic sample DB generation from sampling.toml
+# Reads sample rate/seed from settings unless overridden and invokes build_sample_database()
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build 0.03% stratified mortgages_sample.duckdb from mortgages.duckdb.")
     parser.add_argument("--full-db", default=str(DEFAULT_FULL_DB), help="Path to full mortgages.duckdb")

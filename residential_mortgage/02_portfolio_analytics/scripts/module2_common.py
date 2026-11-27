@@ -99,11 +99,15 @@ SAMPLE_SEED = int(_SAMPLING["seed"])
 CORR_SUBSAMPLE_ROWS = int(_SAMPLING["corr_subsample_rows"])
 
 
+# Format an iterable of short string codes into a safe SQL IN (...) tuple literal
+# Quotes each item cleanly and joins items inside parentheses
 def sql_list(items: Iterable[str]) -> str:
     """Format an iterable of short codes into a SQL tuple literal."""
     return "(" + ", ".join(f"'{item}'" for item in items) + ")"
 
 
+# Return and create the dedicated output directory for one Module 2 script
+# Appends script_stem to outputs_dir and calls mkdir(parents=True, exist_ok=True)
 def script_out(outputs_dir: Path, script_stem: str) -> Path:
     """Return per-script output folder under outputs_dir/<script_stem>/ and create it."""
     d = outputs_dir / script_stem
@@ -111,16 +115,22 @@ def script_out(outputs_dir: Path, script_stem: str) -> Path:
     return d
 
 
+# Return the partitioned December book_snapshot Parquet folder path
+# Resolves outputs_dir / '07_default_rate_history' / 'book_snapshot'
 def snapshot_dir(outputs_dir: Path) -> Path:
     """Return partitioned book_snapshot directory produced by 07_default_rate_history."""
     return outputs_dir / "07_default_rate_history" / "book_snapshot"
 
 
+# Return the partitioned December behavioral features Parquet folder path
+# Resolves outputs_dir / '09_risk_drivers' / 'book_snapshot_behavioural'
 def snapshot_beh_dir(outputs_dir: Path) -> Path:
     """Return partitioned book_snapshot_behavioural directory produced by 09_risk_drivers."""
     return outputs_dir / "09_risk_drivers" / "book_snapshot_behavioural"
 
 
+# Attach standard Module 2 CLI flags (--db, --marts, --core-dir, --outputs-dir, --full)
+# Defaults every script safely to the 0.03% sample DB unless --full is explicitly passed
 def add_common_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """Attach standard Module 2 CLI flags (default = sample DB, --full = production DB)."""
     parser.add_argument("--db", default=None, help="source mortgages DuckDB file (overrides default/full)")
@@ -135,6 +145,8 @@ def add_common_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     return parser
 
 
+# Resolve final input/output filesystem paths from parsed CLI arguments and --full toggle
+# Selects sample vs. production _settings defaults whenever an argument is left None
 def resolve_paths(args: argparse.Namespace) -> argparse.Namespace:
     """Resolve sample (default) vs --full storage paths when not explicitly overridden."""
     full = bool(getattr(args, "full", False))
@@ -150,6 +162,8 @@ def resolve_paths(args: argparse.Namespace) -> argparse.Namespace:
     return args
 
 
+# Configure DuckDB memory cap, thread pool size, and temporary spill directory
+# Reads limits from compute.toml and issues PRAGMA memory_limit, temp_directory, and threads
 def configure_duckdb(con: duckdb.DuckDBPyConnection, memory_limit: str = DEFAULT_MEM_LIMIT) -> None:
     """Apply RAM, threads, and temporary spill directory settings from compute.toml."""
     SCRATCH_DIR.mkdir(parents=True, exist_ok=True)
@@ -159,6 +173,8 @@ def configure_duckdb(con: duckdb.DuckDBPyConnection, memory_limit: str = DEFAULT
     con.execute(f"PRAGMA threads={DEFAULT_THREADS}")
 
 
+# Open a DuckDB database connection with standardized Module 2 performance settings
+# Applies read_only mode and calls configure_duckdb() on the new connection handle
 def connect(db: str | Path, read_only: bool = True, memory_limit: str = DEFAULT_MEM_LIMIT) -> duckdb.DuckDBPyConnection:
     """Open DuckDB connection and configure safe RAM/temp spill settings."""
     con = duckdb.connect(str(db), read_only=read_only)
@@ -166,6 +182,8 @@ def connect(db: str | Path, read_only: bool = True, memory_limit: str = DEFAULT_
     return con
 
 
+# Attach a secondary DuckDB file strictly READ_ONLY under a chosen SQL alias
+# Detaches any pre-existing alias, attaches read-only, and returns the '<alias>.' SQL prefix
 def attach_db(con: duckdb.DuckDBPyConnection, path: str | Path, alias: str) -> str:
     """Attach another DuckDB database read-only and return its SQL prefix."""
     try:
@@ -177,6 +195,8 @@ def attach_db(con: duckdb.DuckDBPyConnection, path: str | Path, alias: str) -> s
     return f"{alias}."
 
 
+# Return all quarterly loan_monthly_core Parquet file paths sorted chronologically
+# Globs *.parquet in core_dir and raises FileNotFoundError if 00_build_monthly_core is missing
 def list_core_files(core_dir: Path) -> list[Path]:
     """Return sorted quarterly Parquet files inside a monthly_core directory."""
     files = sorted(core_dir.glob("*.parquet"))
@@ -187,6 +207,8 @@ def list_core_files(core_dir: Path) -> list[Path]:
     return files
 
 
+# Register a lazy DuckDB TEMP VIEW spanning all quarterly core Parquet partitions
+# Passes the explicit sorted file list to DuckDB read_parquet([...])
 def register_core_view(
     con: duckdb.DuckDBPyConnection,
     core_dir: Path,
@@ -199,6 +221,8 @@ def register_core_view(
     return files
 
 
+# Prevent accidentally mixing sample scripts with full marts DB or vice versa
+# Compares CLI sample_flag against build_metadata.scope and raises RuntimeError on mismatch
 def assert_scope_match(marts_con: duckdb.DuckDBPyConnection, sample_flag: bool) -> None:
     """Reject mixing sample scripts against full marts DB or vice versa."""
     expected = "sample" if sample_flag else "full"
@@ -214,11 +238,15 @@ def assert_scope_match(marts_con: duckdb.DuckDBPyConnection, sample_flag: bool) 
         )
 
 
+# Return SQL WHERE predicate filtering sample vs. full loans consistently
+# Returns literal 'TRUE' now that sample slicing happens directly in mortgages_sample.duckdb
 def scope(sample: bool, prefix: str = "", alias: str = "") -> str:
     """Return SQL predicate; kept as TRUE now that sample DB is pre-sliced into loans_table."""
     return "TRUE"
 
 
+# Generate SQL CASE expression grouping reporting dates into the five economic eras
+# Maps calendar years into build-up, crisis, recovery, COVID, and recent buckets
 def era_case(col: str = "reporting_period") -> str:
     """Return SQL CASE expression assigning M2-1 calendar eras."""
     return (
@@ -230,17 +258,23 @@ def era_case(col: str = "reporting_period") -> str:
     )
 
 
+# Execute a SQL query and materialize results cleanly as a pandas DataFrame
+# Delegates to con.execute(sql).df()
 def q(con: duckdb.DuckDBPyConnection, sql: str) -> pd.DataFrame:
     """Execute SQL and return pandas DataFrame."""
     return con.execute(sql).df()
 
 
+# Execute a SQL aggregate query and extract its top-left scalar value
+# Calls fetchall() and returns rows[0][0] if non-empty else None
 def scalar(con: duckdb.DuckDBPyConnection, sql: str):
     """Execute SQL and return top-left scalar or None."""
     rows = con.execute(sql).fetchall()
     return rows[0][0] if rows else None
 
 
+# Compute total row count, distinct key combinations, and NULL key count for a table
+# Queries DuckDB COUNT(*) and COUNT(DISTINCT key_cols) with NULL key predicate
 def verify_key_stats(con: duckdb.DuckDBPyConnection, table_name: str, keys: Sequence[str]) -> tuple[int, int, int]:
     """Return (row_count, distinct_non_null_key_count, null_key_rows) for a table."""
     if not keys:
@@ -259,6 +293,8 @@ def verify_key_stats(con: duckdb.DuckDBPyConnection, table_name: str, keys: Sequ
     return rows, distinct, null_rows
 
 
+# Assert zero NULL keys and exact row-to-distinct-key uniqueness on a materialized mart
+# Calls verify_key_stats() and raises ValueError immediately upon any violation
 def _enforce_keys(con: duckdb.DuckDBPyConnection, name: str, keys: Sequence[str]) -> tuple[int, int]:
     """Validate non-null unique key on newly created mart, raising ValueError on violation."""
     rows, distinct, null_rows = verify_key_stats(con, name, keys)
@@ -271,6 +307,8 @@ def _enforce_keys(con: duckdb.DuckDBPyConnection, name: str, keys: Sequence[str]
     return rows, distinct
 
 
+# Materialize a DuckDB mart directly from a SQL query and validate its primary key
+# Executes CREATE OR REPLACE TABLE and invokes _enforce_keys() before returning counts
 def write_mart(
     con: duckdb.DuckDBPyConnection,
     name: str,
@@ -282,6 +320,8 @@ def write_mart(
     return _enforce_keys(con, name, keys)
 
 
+# Persist a pandas DataFrame cleanly as a DuckDB mart and enforce its primary key
+# Registers transient view _m2_df, materializes table, unregisters handle, and checks keys
 def write_df(
     con: duckdb.DuckDBPyConnection,
     name: str,
@@ -298,6 +338,8 @@ def write_df(
     return _enforce_keys(con, name, keys)
 
 
+# Append DataFrame rows into an existing DuckDB mart without mutating schema
+# Skips empty inputs, registers transient _m2_ins_df view, inserts, and unregisters cleanly
 def insert_df(con: duckdb.DuckDBPyConnection, name: str, df: pd.DataFrame) -> None:
     """Append a DataFrame into an existing DuckDB table cleanly."""
     if df.empty:
@@ -310,17 +352,25 @@ def insert_df(con: duckdb.DuckDBPyConnection, name: str, df: pd.DataFrame) -> No
         con.unregister("_m2_ins_df")
 
 
+# Standard validation runner collecting named PASS/FAIL assertions for each script
+# Renders uniform ASCII check lines and returns exit code 1 if any assertion failed
 class Checker:
     """Collect PASS/FAIL validation assertions and emit standard ASCII summary."""
 
+    # Initialize assertion collector list and script banner title
+    # Stores title string and empty (label, ok, detail) tuple list
     def __init__(self, title: str) -> None:
         self.title = title
         self.checks: list[tuple[str, bool, str]] = []
 
+    # Append a boolean check result with optional diagnostic message
+    # Casts ok explicitly to bool and stores the triple in self.checks
     def add(self, label: str, ok: bool, detail: str = "") -> None:
         """Record an assertion result."""
         self.checks.append((label, bool(ok), detail))
 
+    # Verify primary key uniqueness on a target mart and record PASS/FAIL in Checker
+    # Calls verify_key_stats() and logs row count, distinct keys, and null count
     def key(
         self,
         con: duckdb.DuckDBPyConnection,
@@ -337,6 +387,8 @@ class Checker:
         self.add(f"unique key of {mart}", ok, msg)
         return ok
 
+    # Print every recorded check result to stdout and return process exit code
+    # Emits PASS/FAIL summary lines and returns 0 when all pass or 1 on any failure
     def finish(self) -> int:
         """Print ASCII PASS/FAIL summary and return process exit code."""
         failed = [c for c in self.checks if not c[1]]
@@ -351,6 +403,8 @@ class Checker:
         return 1 if failed else 0
 
 
+# Compute exact contractual remaining principal balance at 0-based months on book
+# Applies closed-form fixed-rate annuity formula, safely falling back to straight-line at 0%
 def scheduled_upb(orig_upb: float, note_rate_pct: float, loan_term: int, mob: int) -> float:
     """Compute contractual scheduled UPB at 0-based months on book `mob`.
 
@@ -373,6 +427,8 @@ def scheduled_upb(orig_upb: float, note_rate_pct: float, loan_term: int, mob: in
     return round(max(p0 * (pow_n - pow_k) / denom, 0.0), 2)
 
 
+# Generate a DuckDB SQL expression matching Python scheduled_upb() to the cent
+# Translates contractual annuity decay and 0%-rate fallback directly into SQL CASE logic
 def scheduled_upb_sql(
     orig_upb_expr: str,
     note_rate_expr: str,
@@ -393,6 +449,8 @@ def scheduled_upb_sql(
     )
 
 
+# Apply UK PRA COVID deferral DPD freeze rule across one loan's chronological history
+# Caps relief at 6 cumulative months ending <= 2021-07 while holding known DPD at entry level
 def covid_hold_months(
     mb: Sequence[int | None],
     plans: Sequence[str],
@@ -457,11 +515,15 @@ def covid_hold_months(
     return out, in_hold
 
 
+# Evaluate the standard normal cumulative distribution function
+# Computes 0.5 * (1 + erf(x / sqrt(2))) using Python's math.erf
 def normal_cdf(x: float) -> float:
     """Standard normal CDF using Python math.erf."""
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
 
+# Compute the inverse standard normal CDF (probit function) for Vasicek MLE
+# Uses Peter Acklam's rational polynomial approximation with ~1e-9 accuracy across tail regions
 def inv_normal_cdf(p: float) -> float:
     """Acklam rational approximation to inverse standard normal CDF (precision ~1e-9)."""
     if not (0.0 < p < 1.0):
@@ -495,6 +557,8 @@ def inv_normal_cdf(p: float) -> float:
     return num / den
 
 
+# Compute binomial proportion point estimate and 95% Wilson score confidence interval
+# Handles small counts and edge probabilities cleanly without normal-approximation overshoot
 def wilson_ci(events: int, total: int, z: float = 1.959963984540054) -> tuple[float, float, float]:
     """Return (point_rate, ci_low, ci_high) via Wilson score interval."""
     if total <= 0:
@@ -507,6 +571,8 @@ def wilson_ci(events: int, total: int, z: float = 1.959963984540054) -> tuple[fl
     return p, max(0.0, center - half), min(1.0, center + half)
 
 
+# Write a matplotlib Figure cleanly to disk using project DPI settings and free memory
+# Ensures parent directory exists, saves tight PNG, and closes the figure handle
 def save_chart(fig: plt.Figure, out_path: Path) -> None:
     """Save matplotlib figure using compute.toml dpi and close cleanly."""
     out_path.parent.mkdir(parents=True, exist_ok=True)

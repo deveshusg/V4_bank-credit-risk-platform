@@ -59,6 +59,8 @@ CONVERT_MEM_LIMIT = str(_COMPUTE["duckdb"]["convert_memory_limit"])
 # Terminal progress and text formatting
 # =======================================================================================
 
+# Format a raw byte count into a human-readable KB, MB, or GB string
+# Divides recursively by 1024 across unit tiers until the value falls below 1024
 def format_bytes(num_bytes: float) -> str:
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if abs(num_bytes) < 1024.0:
@@ -67,6 +69,8 @@ def format_bytes(num_bytes: float) -> str:
     return f"{num_bytes:.2f} PB"
 
 
+# Format an elapsed duration in seconds into a readable seconds or h/m/s string
+# Splits total seconds into integer hours, minutes, and remaining seconds for console output
 def format_seconds(seconds: float) -> str:
     seconds = int(max(0, seconds))
     m, s = divmod(seconds, 60)
@@ -76,6 +80,8 @@ def format_seconds(seconds: float) -> str:
     return f"{m:02d}m {s:02d}s"
 
 
+# Overwrite the active terminal progress line without scrolling the console
+# Pads text to clear prior characters and writes with a trailing carriage return when TTY
 def print_in_place(line: str):
     """Print an updating line in place if in an interactive terminal."""
     if not sys.stdout.isatty():
@@ -86,6 +92,8 @@ def print_in_place(line: str):
     sys.stdout.flush()
 
 
+# Print a completed status line cleanly over any active in-place progress indicator
+# Clears the trailing width and finishes with a newline so subsequent output starts fresh
 def print_final(line: str):
     """Print a completed line and advance cursor."""
     if sys.stdout.isatty():
@@ -97,15 +105,21 @@ def print_final(line: str):
     sys.stdout.flush()
 
 
+# Track uncompressed byte progress while streaming one quarterly CSV out of the ZIP archive
+# Updates a throttled console bar every 0.25s showing percent extracted, speed, and ETA
 class ExtractionProgressBar:
     """Progress tracker for extracting CSV files from the raw zip."""
 
+    # Initialize ZIP extraction size totals and refresh throttling timestamps
+    # Stores the quarter label, uncompressed byte target, and initial clock markers
     def __init__(self, total_bytes: int, prefix: str):
         self.total_bytes = total_bytes
         self.prefix = prefix
         self.start_time = time.perf_counter()
         self.last_update = 0.0
 
+    # Advance the extraction counter and redraw the progress bar at throttled intervals
+    # Computes elapsed throughput in MB/s and emits an in-place percentage bar every 0.25s
     def update(self, current_bytes: int):
         now = time.perf_counter()
         if now - self.last_update < 0.1 and current_bytes < self.total_bytes:
@@ -129,6 +143,8 @@ class ExtractionProgressBar:
         )
         print_in_place(text)
 
+    # Finalize the extraction progress display when the CSV stream reaches EOF
+    # Formats total bytes and elapsed duration into a permanent console summary line
     def finish(self, lines: int):
         elapsed = time.perf_counter() - self.start_time
         speed = self.total_bytes / elapsed if elapsed > 0 else 0
@@ -139,9 +155,13 @@ class ExtractionProgressBar:
         print_final(text)
 
 
+# Display a background spinner and Parquet growth rate during DuckDB CSV conversion
+# Polls the temporary .parquet.tmp file size on a daemon thread every 0.5s
 class StreamingProgressBar:
     """Progress tracker for streaming CSV into Parquet."""
 
+    # Configure spinner state, target temp Parquet path, and synchronization threading event
+    # Records initial clock timestamps so throughput reflects DuckDB conversion start
     def __init__(self, con, prefix: str):
         self.con = con
         self.prefix = prefix
@@ -149,9 +169,13 @@ class StreamingProgressBar:
         self._stop_event = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
 
+    # Spawn the background daemon thread that animates conversion progress
+    # Starts _run() on a daemon Thread so interpreter exit cannot hang on failure
     def start(self):
         self._thread.start()
 
+    # Poll the temp Parquet file size repeatedly until the stop signal fires
+    # Renders current elapsed time and compressed output MB in place every half-second
     def _run(self):
         bar_len = 16
         while not self._stop_event.is_set():
@@ -176,6 +200,8 @@ class StreamingProgressBar:
             print_in_place(text)
             time.sleep(0.2)
 
+    # Signal the background progress thread to stop and wait briefly for clean shutdown
+    # Sets _stop_event, joins with a timeout, and writes the final Parquet byte count
     def finish(self):
         if not self._stop_event.is_set():
             self._stop_event.set()
@@ -185,19 +211,27 @@ class StreamingProgressBar:
             print_final(text)
 
 
+# Track multi-quarter throughput and remaining ETA across a batch conversion run
+# Accumulates raw CSV bytes processed and elapsed seconds per finished quarter
 class OverallProgressTracker:
     """Tracks overall multi-quarter progress and batch ETA."""
 
+    # Initialize batch counters for completed quarters and cumulative raw CSV bytes
+    # Stores total queued count and batch start timestamp for ETA estimation
     def __init__(self, total_quarters: int):
         self.total = total_quarters
         self.completed = 0
         self.start_time = time.perf_counter()
         self.durations = []
 
+    # Accumulate stats after a quarter finishes extracting and converting to Parquet
+    # Increments completed quarter count and adds raw CSV byte volume to running totals
     def record_quarter(self, duration: float):
         self.completed += 1
         self.durations.append(duration)
 
+    # Print overall batch completion percentage, cumulative volume, and estimated ETA
+    # Extrapolates remaining wall-clock time from average seconds per completed quarter
     def print_status(self):
         if self.total <= 1:
             return
@@ -216,6 +250,8 @@ class OverallProgressTracker:
 # Core extraction, streaming, and validation logic
 # =======================================================================================
 
+# Validate and parse a quarter string into numeric year, quarter index, and canonical label
+# Matches YYYYQn case-insensitively and raises SystemExit with usage context if invalid
 def parse_quarter(text: str) -> tuple[int, int, str]:
     """Parse '2005Q1', '2005q1', or '2005-Q1' into (year, quarter_num, '2005Q1')."""
     cleaned = text.strip().upper().replace("-", "")
@@ -226,6 +262,8 @@ def parse_quarter(text: str) -> tuple[int, int, str]:
     return year, q, f"{year}Q{q}"
 
 
+# Discover all quarterly CSV files inside the master Fannie Mae ZIP archive
+# Inspects ZIP member filenames matching YYYYQn.csv and returns them sorted chronologically
 def list_quarters_in_zip(zip_path: Path) -> list[str]:
     """Inspect the zip file and return all quarters in sorted chronological order."""
     if not zip_path.exists():
@@ -243,6 +281,8 @@ def list_quarters_in_zip(zip_path: Path) -> list[str]:
     return [q[2] for q in quarters]
 
 
+# Locate the ZIP entry metadata corresponding to one requested acquisition quarter
+# Scans infolist() for matching YYYYQn.csv stem and raises if absent from archive
 def find_zip_info(zf: zipfile.ZipFile, quarter: str):
     """Find the zipfile.ZipInfo entry for a given quarter."""
     target_name = f"{quarter}.csv".upper()
@@ -252,6 +292,8 @@ def find_zip_info(zf: zipfile.ZipFile, quarter: str):
     return None
 
 
+# Read exact total row count from Parquet footer metadata without decoding column data
+# Queries DuckDB parquet_file_metadata() in memory to return num_rows in milliseconds
 def get_parquet_row_count(file_path: Path) -> int:
     """Read exact row count from a Parquet file."""
     if not file_path.exists() or file_path.stat().st_size == 0:
@@ -268,6 +310,8 @@ def get_parquet_row_count(file_path: Path) -> int:
             con.close()
 
 
+# Verify whether a quarter already has valid matching Parquet and JSON audit outputs
+# Checks both file existence and equality between JSON parquet_rows and live Parquet metadata
 def is_quarter_complete(final_parquet: Path, final_json: Path) -> tuple[bool, int]:
     """Check if both .parquet and .conversion.json exist and row counts match."""
     if not final_parquet.exists() or not final_json.exists():
@@ -283,6 +327,8 @@ def is_quarter_complete(final_parquet: Path, final_json: Path) -> tuple[bool, in
         return False, 0
 
 
+# Persist quarter extraction, compression, and row-parity provenance metadata atomically
+# Writes JSON to a .tmp file and replaces the target .conversion.json atomically
 def write_conversion_record(target_json: Path, record: dict):
     """Write conversion record atomically via a temporary file."""
     tmp_json = target_json.with_suffix(".json.tmp")
@@ -293,6 +339,8 @@ def write_conversion_record(target_json: Path, record: dict):
     tmp_json.rename(target_json)
 
 
+# Stream one raw pipe-delimited CSV from the ZIP onto scratch disk while counting newlines
+# Reads in 8 MB chunks to count raw lines concurrently and clean up partials on error
 def extract_quarter_csv(zf: zipfile.ZipFile, zip_info: zipfile.ZipInfo, target_csv: Path, quarter: str) -> tuple[int, float]:
     """Extract CSV chunk by chunk, counting line breaks and updating the progress bar."""
     lines = 0
@@ -320,6 +368,8 @@ def extract_quarter_csv(zf: zipfile.ZipFile, zip_info: zipfile.ZipInfo, target_c
     return lines, time.perf_counter() - start_time
 
 
+# Convert a raw 113-column CSV into ZSTD-compressed all-VARCHAR Parquet using DuckDB
+# Applies explicit all_varchar=True column map, runs COPY OUT to .tmp, and tracks duration
 def stream_csv_to_parquet(csv_path: Path, parquet_tmp_path: Path, quarter: str) -> float:
     """Use DuckDB to stream raw CSV directly into Parquet with ZSTD compression."""
     columns_sql = ", ".join(f"'{f.column}': 'VARCHAR'" for f in FIELDS)
@@ -360,6 +410,8 @@ def stream_csv_to_parquet(csv_path: Path, parquet_tmp_path: Path, quarter: str) 
     return time.perf_counter() - t0
 
 
+# Enforce zero-loss row parity between raw CSV lines and converted Parquet before publishing
+# Compares raw newline count to Parquet metadata rows and promotes .tmp via os.replace()
 def verify_and_commit(parquet_tmp: Path, final_parquet: Path, expected_lines: int, quarter: str) -> int:
     """Verify Parquet row count matches raw CSV lines, then atomically rename."""
     prefix = f"{quarter} 3/3 Validate rows"
@@ -380,6 +432,8 @@ def verify_and_commit(parquet_tmp: Path, final_parquet: Path, expected_lines: in
     return actual_rows
 
 
+# Backfill a missing .conversion.json audit file for an existing Parquet without re-converting
+# Counts raw lines directly inside the ZIP stream and validates parity against Parquet metadata
 def process_record_only(quarter: str, zip_path: Path, parquet_dir: Path):
     """Back-fill YYYYQn.conversion.json by streaming zip member without extracting to disk.
 
@@ -447,6 +501,8 @@ def process_record_only(quarter: str, zip_path: Path, parquet_dir: Path):
     return True
 
 
+# Orchestrate extraction, conversion, parity verification, and cleanup for one quarter
+# Skips already-complete quarters, backfills missing audit JSONs, and removes scratch CSVs
 def process_quarter(quarter: str, zip_path: Path, scratch_dir: Path, parquet_dir: Path) -> bool:
     """Execute the full pipeline for one quarter. Returns True if converted, False if skipped."""
     final_parquet = parquet_dir / f"{quarter}.parquet"
@@ -524,6 +580,8 @@ def process_quarter(quarter: str, zip_path: Path, scratch_dir: Path, parquet_dir
 # CLI and main entry point
 # =======================================================================================
 
+# Translate CLI positional or flag quarter filters into an ordered list to convert
+# Handles --all, --quarter, --from/--to ranges, or positional targets against ZIP inventory
 def build_quarter_list(args, all_available: list[str]) -> list[str]:
     """Resolve CLI arguments into an ordered list of quarters to process."""
     if args.all or (args.target and args.target[0].lower() == "all"):
@@ -566,6 +624,8 @@ def build_quarter_list(args, all_available: list[str]) -> list[str]:
     )
 
 
+# Parse CLI arguments, verify archive/folder prerequisites, and run the conversion batch
+# Loops sequentially through requested quarters while updating OverallProgressTracker
 def main():
     parser = argparse.ArgumentParser(description="Convert Fannie Mae raw CSV quarters into compressed Parquet files.")
     parser.add_argument("target", nargs="*", help="Positional quarter specification: '2005Q1', '2000Q1 2008Q4', or 'all'")

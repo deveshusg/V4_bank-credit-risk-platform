@@ -28,6 +28,8 @@ import module2_common as c  # noqa: E402
 roll_mod = importlib.import_module("03_roll_rates")
 
 
+# Measure loss emergence curves across 1-to-24 months and compare 30d/60d/90d/180d DPD thresholds
+# Aggregates defaults and early-arrears conversion statistics in DuckDB across core Parquets
 def run_emergence(marts: object, core_files: list[Path]) -> int:
     """Compute arrears emergence lags and 60/90/120-day sensitivity."""
     t0 = time.time()
@@ -180,12 +182,16 @@ def run_emergence(marts: object, core_files: list[Path]) -> int:
     return check.finish()
 
 
+# Parse CLI arguments for 04_emergence_and_thresholds
+# Registers standard Module 2 database and sample/--full flags
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Emergence period and 60/90/120-day threshold sensitivity.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Connect to marts DB and generate loss_emergence_mart and threshold_comparison_mart
+# Verifies scope match, locates core Parquet partitions, and runs emergence assertions
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

@@ -82,14 +82,16 @@ SUMMARY_TEXT = {
 }
 
 
-# Read the column names and data types of one table or view.
+# Read column names and SQL types for one table or view from DuckDB metadata
+# Queries PRAGMA table_info() and returns ordered column-to-type dictionary
 def column_types(con, source_object):
     rows = con.execute(f"DESCRIBE {source_object}").fetchall()
     return {row[0]: row[1] for row in rows}
 
 
 # Read field_leakage_table and put the rows in catalogue order:
-# class, then loans_table first, then layout position (blank last), then field name.
+# Load leakage audit rows sorted cleanly into catalogue presentation order
+# Orders by classification tier, loans_table before monthly view, then layout position
 def read_leakage_rows(con):
     rows = con.execute(
         "SELECT field_name, source_object, layout_position, layout_name, field_class, "
@@ -103,7 +105,8 @@ def read_leakage_rows(con):
     return sorted(rows, key=order)
 
 
-# Count rows and filled rows for every column of one source object, in one query.
+# Compute total rows and non-null fill percentages for all columns of a table in one scan
+# Executes a single batched COUNT(*) and COUNT(col) SQL aggregation per source object
 def measure_fill(con, source_object, types, names):
     parts = ["COUNT(*)"]
     for name in names:
@@ -116,7 +119,8 @@ def measure_fill(con, source_object, types, names):
     return result[0], {name: result[i + 1] for i, name in enumerate(names)}
 
 
-# Build the catalogue rows in the column order of feature_catalogue_table.
+# Merge leakage classifications, SQL data types, fill percentages, and treatment notes
+# Produces typed tuples aligned with feature_catalogue_table column schema
 def build_rows(leakage_rows, types, fill, measured_on):
     rows = []
     for (name, source, position, layout_name, field_class, lag_rule, usable,
@@ -130,13 +134,15 @@ def build_rows(leakage_rows, types, fill, measured_on):
     return rows
 
 
-# Print up to 5 names for a failed stop check.
+# Print concise diagnostic pairs when catalogue schema checks find missing columns
+# Displays up to 5 offending (source_object, field_name) identifiers
 def print_names(label, pairs):
     names = ", ".join(f"{s}.{n}" for s, n in pairs[:5])
     print(f"      {label}: {len(pairs)} ({names})")
 
 
-# Data treatment bullets for one class. Fields that share a note are listed together.
+# Group fields sharing identical cleaning notes into readable markdown bullet points
+# Collects column lists per DATA_TREATMENT note and appends default note for remaining fields
 def treatment_bullets(class_rows):
     noted = [r for r in class_rows if r[14]]
     notes = []
@@ -155,7 +161,8 @@ def treatment_bullets(class_rows):
     return lines
 
 
-# Build the Markdown text, grouped by class.
+# Render the complete Module 1 feature catalogue reference document in markdown
+# Formats provenance counts, class summary tables, per-column fill tables, and treatment notes
 def build_markdown(rows, db_name, measured_on, n_loans, n_monthly):
     lines = [
         "# Feature catalogue: Module 1",
@@ -186,6 +193,8 @@ def build_markdown(rows, db_name, measured_on, n_loans, n_monthly):
     return "\n".join(lines) + "\n"
 
 
+# Compute fill rates, write feature_catalogue_table atomically, and export docs/feature_catalogue.md
+# Verifies 1:1 parity against field_leakage_table and blocks export if quarantined fields leak
 def main():
     parser = argparse.ArgumentParser(description="Feature catalogue of the base tables.")
     parser.add_argument("--db", default=None, help="DuckDB file (defaults to sample DB; use --full for production DB)")
@@ -224,7 +233,8 @@ def main():
         con.close()
         return 1
 
-    # Fill rates: one aggregate query per source object.
+    # Measure total rows and non-null counts across every column in loans_table and loan_monthly_view
+    # Runs one batched aggregate query per object to avoid repeated table scans
     measured_on = "all loans" if args.full else f"{SAMPLE_RATE_PCT:.4g}% stratified sample"
     fill = {}
     for source in (LOANS, MONTHLY):
@@ -232,7 +242,8 @@ def main():
         fill[source] = measure_fill(con, source, types[source], names)
     n_loans, n_monthly = fill[LOANS][0], fill[MONTHLY][0]
 
-    # Write feature_catalogue_table in one transaction.
+    # Rebuild feature_catalogue_table and verify schema + quarantine invariants atomically
+    # Commits only after Check 1 (exact parity with leakage table) and Check 2 pass
     rows = build_rows(leakage_rows, types, fill, measured_on)
     con.execute("BEGIN TRANSACTION")
     con.execute(
@@ -279,7 +290,8 @@ def main():
     print(f"Usable as features: {sum(1 for r in rows if r[4])}")
     print(f"Fields with a data-treatment note: {sum(1 for r in rows if r[14])}")
 
-    # Export the Markdown only after the commit.
+    # Render and save docs/feature_catalogue.md once database checks are committed
+    # Formats markdown summary counts, treatment bullets, and per-feature fill tables
     if ok:
         text = build_markdown(rows, db_path.name, measured_on, n_loans, n_monthly)
         md_path.parent.mkdir(parents=True, exist_ok=True)

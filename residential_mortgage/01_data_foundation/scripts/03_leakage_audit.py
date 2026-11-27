@@ -126,18 +126,21 @@ CLASSIFICATION = [
 ]
 
 
-# Read the column names of one table or view from the database.
+# Retrieve every column name currently defined on a DuckDB table or view
+# Queries DuckDB PRAGMA table_info() on the validated object name
 def database_pairs(con, source_object):
     rows = con.execute(f"DESCRIBE {source_object}").fetchall()
     return [(source_object, row[0]) for row in rows]
 
 
-# Layout position and layout name for each column the layout knows.
+# Index Fannie Mae layout column names by position and glossary description
+# Maps Field.column -> (position, layout_name) across FILE_FIELDS
 def layout_lookup():
     return {f.column: (f.position, f.layout_name) for f in FIELDS}
 
 
-# Loans restated per column, summed over all quarters.
+# Sum loan restatement counts across all cohorts per static origination column
+# Aggregates origination_restatements_table by field_name across quarters
 def restated_counts(con):
     rows = con.execute(
         "SELECT column_name, SUM(loans_restated) FROM origination_restatements_table "
@@ -146,7 +149,8 @@ def restated_counts(con):
     return {name: int(n) for name, n in rows}
 
 
-# Check 1 data: pairs not classified, listed twice, or missing from the database.
+# Cross-check script leakage classifications against live columns in DuckDB
+# Detects unclassified columns, duplicate rules, and stale names missing from DB schema
 def compare_to_database(listed, in_database):
     seen, duplicated = set(), []
     for pair in listed:
@@ -158,7 +162,8 @@ def compare_to_database(listed, in_database):
     return unclassified, duplicated, missing
 
 
-# Build the output rows in the column order of field_leakage_table.
+# Assemble rows matching the exact physical schema of field_leakage_table
+# Joins static RULES with layout position, permitted stage flags, and restatement counts
 def build_rows(restated):
     layout = layout_lookup()
     rows = []
@@ -174,12 +179,15 @@ def build_rows(restated):
     return rows
 
 
-# Print up to 5 names for one failed group.
+# Display a short preview of failing column names when schema parity check fails
+# Prints total count plus up to 5 example (source_object, field_name) pairs
 def print_names(label, pairs):
     names = ", ".join(f"{s}.{n}" for s, n in pairs[:5])
     print(f"      {label}: {len(pairs)} ({names})")
 
 
+# Validate schema coverage, rebuild field_leakage_table atomically, and verify zero leakage
+# Rejects write if unclassified columns or quarantined-as-usable rules are present
 def main():
     parser = argparse.ArgumentParser(description="Leakage audit of the base tables.")
     parser.add_argument("--db", default=None, help="DuckDB file (defaults to sample DB; use --full for production DB)")
@@ -189,7 +197,8 @@ def main():
     db_path = Path(args.db) if args.db else (FULL_DB if args.full else DEFAULT_DB)
     print(f"Leakage audit: {db_path.name}")
 
-    # Stop if the database is not there, so a wrong path never creates an empty file.
+    # Verify the target DuckDB file exists before opening a connection
+    # Prevents DuckDB from silently creating a blank database on a bad --db path
     if not db_path.exists():
         print(f"FAIL  database not found: {db_path}")
         return 1
@@ -198,7 +207,8 @@ def main():
     listed = [(s, n) for s, n, _, _ in CLASSIFICATION]
     restated = restated_counts(con)
 
-    # Check 1: every column classified exactly once. Stop before writing if it fails.
+    # Confirm 100% 1-to-1 classification parity between RULES and live DuckDB columns
+    # Compares DB schemas against RULES before touching field_leakage_table
     unclassified, duplicated, missing = compare_to_database(listed, in_database)
     check1 = not (unclassified or duplicated or missing)
     if not check1:
@@ -210,7 +220,8 @@ def main():
         con.close()
         return 1
 
-    # Write field_leakage_table in one transaction.
+    # Atomically replace field_leakage_table and enforce Check 2 inside one transaction
+    # Drops/recreates the table and rolls back immediately if any quarantined field is marked usable
     rows = build_rows(restated)
     con.execute("BEGIN TRANSACTION")
     con.execute(

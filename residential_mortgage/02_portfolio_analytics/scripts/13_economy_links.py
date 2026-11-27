@@ -32,6 +32,8 @@ import module2_common as c  # noqa: E402
 ltv_mod = __import__("06_current_ltv")
 
 
+# Build quarterly portfolio performance rates aligned strictly with publication-lagged macro series
+# Computes 0..24m lagged Pearson correlations, downturn magnitudes, and macro overlay chart
 def run_economy_links(
     marts: object,
     src_prefix: str,
@@ -108,12 +110,14 @@ def run_economy_links(
     for col in ["default_starts", "closed_credit_exits", "closed_def_upb", "closed_net_loss", "cures"]:
         rates[col] = rates[col].fillna(0)
 
-    # Whole book aggregate rows alongside segment rows
+    # Union whole-portfolio quarterly counts alongside occupancy x purpose segment rows
+    # Computes annualized default rates, cure rates, CPR, and closed credit-exit severity
     wb = rates.groupby("quarter_date", as_index=False).sum(numeric_only=True)
     wb["segment"] = "ALL"
     rates = pd.concat([wb, rates], ignore_index=True)
 
-    # Publication-lagged quarterly macro alignment (zero look-ahead!)
+    # Align each portfolio quarter with contemporaneous and 0-to-24m lagged FRED/FHFA macro series
+    # Shifts macro lookup dates backward cleanly so future macro releases never leak into features
     macro_q = c.q(marts, f"""
         WITH unrate_lag AS (
             SELECT
@@ -232,7 +236,8 @@ def run_economy_links(
     md_df["trough_date"] = pd.to_datetime(md_df["trough_date"]).dt.date
     c.write_df(marts, "macro_downturn_mart", md_df, ["geography", "indicator", "peak_date", "trough_date"])
 
-    # Chart (300 dpi): Annualized default rate vs lagged unemployment
+    # Render dual-axis macro stress comparison between annualized defaults and unemployment rate
+    # Saves publication-ready 300 dpi chart to 13_economy_links output folder
     if not all_r.empty:
         fig, ax1 = plt.subplots(figsize=(11, 4.8))
         xdates = pd.to_datetime(all_r["quarter_date"])
@@ -252,12 +257,16 @@ def run_economy_links(
     return check.finish()
 
 
+# Parse CLI arguments for 13_economy_links
+# Uses module2_common.add_common_args()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Quarterly portfolio rates and publication-lagged macro links.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Connect to marts and source DBs and build lagged macro-to-portfolio linkage tables
+# Verifies scope match, reads core Parquet partitions, and invokes run_economy_links()
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

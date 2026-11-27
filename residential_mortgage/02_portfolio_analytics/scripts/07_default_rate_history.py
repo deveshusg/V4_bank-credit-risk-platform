@@ -37,6 +37,8 @@ import module2_common as c  # noqa: E402
 ltv_mod = __import__("06_current_ltv")
 
 
+# Estimate single-factor Vasicek implied asset correlation (rho) and pooled PD by MLE
+# Maximizes binomial-probit log-likelihood via scipy optimize over non-overlapping December windows
 def fit_vasicek_rho(events: np.ndarray, totals: np.ndarray) -> tuple[float, float, float]:
     """Estimate pooled PD and Vasicek single-factor correlation via mode-centered adaptive quadrature.
 
@@ -108,6 +110,8 @@ def fit_vasicek_rho(events: np.ndarray, totals: np.ndarray) -> tuple[float, floa
     return p_pool, best_rho, best_ll
 
 
+# Compute rolling 12-month default rate history, Vasicek rho mart, and December book_snapshot Parquets
+# Scans monthly core via DuckDB, reconciles December snapshots to balance_rollforward_mart, plots DR
 def run_default_rate_history(
     marts: object,
     src_prefix: str,
@@ -231,7 +235,8 @@ def run_default_rate_history(
     )
     c.write_df(marts, "default_rate_history_mart", dr_df, ["observation_month", "series_group", "series_value"])
 
-    # B. Vasicek implied correlation on complete non-overlapping December snapshots (2000-12 .. 2024-12)
+    # Estimate single-factor Vasicek asset correlation over non-overlapping December snapshots
+    # Fits MLE per occupancy-purpose segment across complete 2000-12..2024-12 windows
     dec_sub = dr_df[
         (pd.to_datetime(dr_df["observation_month"]).dt.month == 12)
         & (dr_df["window_complete"])
@@ -252,7 +257,8 @@ def run_default_rate_history(
     corr_df = pd.DataFrame(corr_rows)
     c.write_df(marts, "implied_correlation_mart", corr_df, ["segment"])
 
-    # C. Partitioned December book_snapshot written year-by-year directly via DuckDB COPY (zero pandas 280M load!)
+    # Write partitioned December book_snapshot Parquet files year-by-year via DuckDB COPY
+    # Avoids loading full monthly core rows into Python while enriching with LTV and 12m outcomes
     script_dir = c.script_out(outputs_dir, "07_default_rate_history")
     snap_root = script_dir / "book_snapshot"
     if snap_root.exists():
@@ -419,7 +425,8 @@ def run_default_rate_history(
         if yr_idx % 5 == 0 or yr_idx == len(years):
             print(f"  [{yr_idx:2d}/{len(years)}] book_snapshot {yr} wrote {int(rec[0]):,} rows ({time.time() - t0:.1f}s)", flush=True)
 
-    # Reconcile December book_snapshot vs balance_rollforward_mart
+    # Cross-check written December book_snapshot Parquet totals against balance_rollforward_mart
+    # Merges snapshot counts/UPB on December reporting dates to verify zero loan/UPB drift
     rf_dec = c.q(marts, "SELECT reporting_period AS snapshot_date, open_loans, closing_upb FROM balance_rollforward_mart WHERE month(reporting_period) = 12")
     rec_df = pd.DataFrame(dec_reconcile)
     max_diff_loans = 0
@@ -431,7 +438,8 @@ def run_default_rate_history(
             max_diff_loans = int((mrg["snap_loans"] - mrg["open_loans"]).abs().max())
             max_diff_upb = float((mrg["snap_upb"] - mrg["closing_upb"]).abs().max())
 
-    # Chart (300 dpi): Whole book rolling 12m default rate history
+    # Plot count-weighted vs. balance-weighted rolling 12-month default rates across 25 years
+    # Restricts curve to complete 12m forward windows (window_complete=True) and saves PNG
     wb = dr_df[(dr_df["series_group"] == "whole_book") & (dr_df["window_complete"])].sort_values("observation_month")
     if not wb.empty:
         fig, ax = plt.subplots(figsize=(11, 4.8))
@@ -462,12 +470,16 @@ def run_default_rate_history(
     return check.finish()
 
 
+# Parse CLI arguments for 07_default_rate_history
+# Attaches module2_common CLI arguments
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="12-month default rate history, Vasicek rho and book_snapshot.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Run rolling 12m default rate history, implied correlation estimation, and snapshot export
+# Validates scope match and writes marts plus partitioned year=YYYY/part.parquet snapshots
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

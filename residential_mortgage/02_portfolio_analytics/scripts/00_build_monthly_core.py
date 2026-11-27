@@ -43,6 +43,8 @@ WORKOUT_FILTER_SQL = """
 """
 
 
+# Build SQL extracting the 23 typed monthly core fields directly from raw all-VARCHAR Parquet
+# Applies MMYYYY date parsing, DECIMAL(12,2) casting, and XX sentinel mapping
 def core_select_sql(raw_parquet: Path, quarter: str, loan_filter_sql: str = "") -> str:
     """Build SQL selecting the 23 typed loan_monthly_core columns from one raw Parquet file."""
     p = str(raw_parquet).replace("\\", "/")
@@ -81,6 +83,8 @@ def core_select_sql(raw_parquet: Path, quarter: str, loan_filter_sql: str = "") 
     """
 
 
+# Build SQL extracting sparse foreclosure costs, proceeds, and modifications from raw Parquet
+# Filters rows where exits, costs, proceeds, or mod flags exist so table stays compact
 def workout_select_sql(raw_parquet: Path, quarter: str, loan_filter_sql: str = "") -> str:
     """Build SQL selecting workout/exit cashflows from one raw Parquet file."""
     p = str(raw_parquet).replace("\\", "/")
@@ -113,6 +117,8 @@ def workout_select_sql(raw_parquet: Path, quarter: str, loan_filter_sql: str = "
     """
 
 
+# Compute cent-exact DECIMAL(18,2) row, loan, and UPB control totals on raw Parquet
+# Sums active balances, payoff removals, credit exits, other exits, write-offs, and forgiveness
 def raw_totals_sql(raw_parquet: Path, loan_filter_sql: str = "") -> str:
     """Compute cent-exact core control sums from one raw Parquet file (minimal column scan)."""
     p = str(raw_parquet).replace("\\", "/")
@@ -132,6 +138,8 @@ def raw_totals_sql(raw_parquet: Path, loan_filter_sql: str = "") -> str:
     """
 
 
+# Compute matching DECIMAL(18,2) control totals and key-null/duplicate counts on built core Parquet
+# Verifies zero duplicate (loan_id, reporting_period) pairs and zero NULL primary keys
 def core_totals_sql(core_parquet: Path) -> str:
     """Compute matching control sums and streaming sorted duplicate check from a built core Parquet file."""
     p = str(core_parquet).replace("\\", "/")
@@ -163,6 +171,8 @@ def core_totals_sql(core_parquet: Path) -> str:
     """
 
 
+# Build one quarterly loan_monthly_core Parquet from raw Parquet and populate workout cashflows
+# Copies to .tmp atomically, inserts workout rows into marts DB, and verifies raw-vs-core parity
 def build_quarter_core(
     con: duckdb.DuckDBPyConnection,
     raw_parquet: Path,
@@ -232,6 +242,8 @@ def build_quarter_core(
     return info, (raw_tot, core_tot)
 
 
+# Initialize the clean typed workout_exit_cashflows_mart table in the marts DB
+# Drops and recreates the 21-column workout schema with DECIMAL(12,2) precision
 def init_workout_table(con: duckdb.DuckDBPyConnection) -> None:
     """Create empty workout_exit_cashflows_mart schema."""
     con.execute("""
@@ -261,6 +273,8 @@ def init_workout_table(con: duckdb.DuckDBPyConnection) -> None:
     """)
 
 
+# Build SQL projecting the 23 narrow core columns from typed loan_monthly_view for sample runs
+# Casts view columns for a single acquisition_quarter and orders by (loan_id, reporting_period)
 def core_select_from_view_sql(quarter: str, src_table: str = "_src_monthly") -> str:
     """Build SQL selecting the 23 typed loan_monthly_core columns from typed loan_monthly_view."""
     return f"""
@@ -294,6 +308,8 @@ def core_select_from_view_sql(quarter: str, src_table: str = "_src_monthly") -> 
     """
 
 
+# Build SQL extracting workout/exit rows from typed loan_monthly_view for sample runs
+# Applies WORKOUT_FILTER_SQL per acquisition_quarter without scanning full external Parquets
 def workout_select_from_view_sql(quarter: str, src_table: str = "_src_monthly") -> str:
     """Build SQL selecting workout/exit cashflows from typed loan_monthly_view."""
     return f"""
@@ -324,6 +340,8 @@ def workout_select_from_view_sql(quarter: str, src_table: str = "_src_monthly") 
     """
 
 
+# Compute cent-exact DECIMAL(18,2) control totals on typed loan_monthly_view for one quarter
+# Matches core_totals_sql metrics column-for-column so sample core builds check out cleanly
 def view_totals_sql(quarter: str, src_table: str = "_src_monthly") -> str:
     """Compute cent-exact control sums from typed loan_monthly_view for one quarter."""
     return f"""
@@ -341,6 +359,8 @@ def view_totals_sql(quarter: str, src_table: str = "_src_monthly") -> str:
     """
 
 
+# Build one quarterly loan_monthly_core Parquet cleanly from sample DB's typed view
+# Writes ZSTD Parquet atomically via .tmp rename, inserts workout rows, and checks parity
 def build_quarter_core_from_view(
     con: duckdb.DuckDBPyConnection,
     quarter: str,
@@ -409,6 +429,8 @@ def build_quarter_core_from_view(
     return info, (raw_tot, core_tot)
 
 
+# Define CLI flags for 00_build_monthly_core (sample default, --full, --raw-dir, --quarter)
+# Extends module2_common CLI arguments cleanly
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build narrow typed loan_monthly_core and workout cashflows.")
     c.add_common_args(parser)
@@ -417,6 +439,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+# Build quarterly loan_monthly_core Parquet partitions, workout mart, and build_metadata
+# Iterates through loaded quarters, reconciles source totals to the cent, and prints check report
 def main() -> int:
     t0 = time.time()
     args = c.resolve_paths(parse_args())

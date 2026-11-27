@@ -52,6 +52,8 @@ BEH_FEATURES = {
 }
 
 
+# Compute smoothed Weight of Evidence (WOE), Information Value (IV), and PSI drift tables
+# Applies 0.5 Laplace smoothing per band across good/bad counts and normalizes distributions to 1.0
 def compute_woe_iv_table(counts_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Compute normalized +0.5 smoothed WOE, IV and era PSI across grouped counts."""
     rd_rows: list[dict] = []
@@ -103,6 +105,8 @@ def compute_woe_iv_table(counts_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Data
     return pd.DataFrame(rd_rows), pd.DataFrame(iv_rows)
 
 
+# Build leakage-free t-1 behavioral snapshot Parquets, WOE/IV marts, and Spearman driver correlations
+# Stages December lagged histories without look-ahead bias, evaluates 15 binned drivers, checks sums
 def run_risk_drivers(
     marts: object,
     src_prefix: str,
@@ -285,7 +289,8 @@ def run_risk_drivers(
     shutil.rmtree(beh_stage_dir, ignore_errors=True)
     shutil.rmtree(beh_by_yr, ignore_errors=True)
 
-    # Aggregate all origination and t-1 behavioral risk drivers in a single streaming pass via UNNEST
+    # Bin all 15 origination and t-1 behavioral risk drivers in a single vectorized DuckDB pass
+    # Uses paired UNNEST arrays over joined December snapshots to avoid 15 separate Parquet scans
     snap_glob = str(snap_dir / "year=*" / "*.parquet").replace("\\", "/")
     beh_glob = str(beh_dir / "year=*" / "*.parquet").replace("\\", "/")
     all_specs = {**ORIG_FEATURES, **BEH_FEATURES}
@@ -325,7 +330,8 @@ def run_risk_drivers(
     c.write_df(marts, "risk_drivers_mart", rd_df, ["era", "feature_name", "band"])
     c.write_df(marts, "feature_iv_mart", iv_df, ["era", "feature_name"])
 
-    # Deterministic reservoir sample (100k PD rows) for Spearman driver correlation matrix
+    # Compute pairwise Spearman rank correlations across numeric PD drivers on a fixed reservoir
+    # Draws repeatable 100k row sample using sampling.toml seed and writes driver_correlation_mart
     num_cols = [
         "credit_score", "orig_ltv", "dti", "note_rate",
         "worst_dpd_12m_t1", "ltv_indexed_t1", "balance_paid_down_pct_t1", "rate_incentive_t1",
@@ -361,12 +367,16 @@ def run_risk_drivers(
     return check.finish()
 
 
+# Parse CLI arguments for 09_risk_drivers
+# Uses module2_common.add_common_args()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Risk drivers, behavioral snapshots, IV and PSI.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Open marts DB, attach source DB read-only, and build risk-driver IV and correlation tables
+# Checks DB scope alignment and executes run_risk_drivers() across snapshots and core cohorts
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

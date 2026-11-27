@@ -24,6 +24,8 @@ if str(SCRIPT_DIR) not in sys.path:
 import module2_common as c  # noqa: E402
 
 
+# Quantify cohort seasoning maturity and left-truncation rates across acquisition vintages
+# Summarizes >3m/>12m/>24m seasoning shares alongside 36m vintage CIFs in DuckDB SQL
 def run_survivorship(marts: object, src_prefix: str, sample_filter: bool = False) -> int:
     """Measure late-acquisition volume and survival differences per cohort."""
     check = c.Checker("17_survivorship: survivorship and left-truncation")
@@ -93,12 +95,16 @@ def run_survivorship(marts: object, src_prefix: str, sample_filter: bool = False
     return check.finish()
 
 
+# Parse CLI arguments for 17_survivorship
+# Uses module2_common.add_common_args()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Survivorship and left-truncation sizing.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Connect to marts/source DBs and populate cohort survivorship_mart
+# Validates DB scope match and executes run_survivorship() cleanly
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

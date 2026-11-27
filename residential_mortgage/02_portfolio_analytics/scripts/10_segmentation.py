@@ -27,6 +27,8 @@ if str(SCRIPT_DIR) not in sys.path:
 import module2_common as c  # noqa: E402
 
 
+# Compute two-sample Kolmogorov-Smirnov (KS) statistic directly from binned score counts
+# Forms cumulative empirical CDFs over histogram counts and returns max absolute gap
 def ks_from_bins(cnt_a: np.ndarray, cnt_b: np.ndarray) -> tuple[float, float]:
     """Return (KS_stat, approx_pvalue) from aligned sorted histogram bin counts."""
     na, nb = float(cnt_a.sum()), float(cnt_b.sum())
@@ -43,6 +45,8 @@ def ks_from_bins(cnt_a: np.ndarray, cnt_b: np.ndarray) -> tuple[float, float]:
     return d_stat, pval
 
 
+# Compute Pearson 2x2 chi-squared statistic and exact asymptotic p-value for binary splits
+# Evaluates sum((O - E)^2 / E) across the 2x2 contingency table using erfc() on sqrt(chi2/2)
 def chi2_2x2(n_a: int, bad_a: int, n_b: int, bad_b: int) -> tuple[float, float]:
     """Compute Pearson Chi-square statistic (df=1) and exact p-value via erfc."""
     obs = np.array([[n_a - bad_a, bad_a], [n_b - bad_b, bad_b]], dtype=float)
@@ -55,6 +59,8 @@ def chi2_2x2(n_a: int, bad_a: int, n_b: int, bad_b: int) -> tuple[float, float]:
     return chi2, pval
 
 
+# Compute symmetric Kullback-Leibler (Jeffreys) divergence between two discrete distributions
+# Applies epsilon floor against zero bins and evaluates sum((p - q) * log(p / q))
 def symmetric_kl(cnt_a: np.ndarray, cnt_b: np.ndarray) -> float:
     """Compute symmetric KL / Jeffrey divergence on smoothed binned distributions."""
     k = max(len(cnt_a), 1)
@@ -63,6 +69,8 @@ def symmetric_kl(cnt_a: np.ndarray, cnt_b: np.ndarray) -> float:
     return float(np.sum((pa - pb) * np.log(pa / pb)))
 
 
+# Evaluate candidate risk segmentations via chi-squared, KS, symmetric KL, and 5-year sufficiency
+# Scans book_snapshot + behavioral features in SQL, flags CRR Art 180 coverage, writes 3 marts
 def run_segmentation(
     marts: object,
     src_prefix: str,
@@ -87,7 +95,8 @@ def run_segmentation(
 
     seg_rows: list[dict] = []
     for split_name, grp_a, grp_b, cond_sql in splits:
-        # 1. Exact 2x2 default rates + risk-cell distributions via DuckDB SQL
+        # Aggregate split loan counts and 12m defaults across candidate binary partitions in SQL
+    # Computes segment bad rates and risk-band contingency distributions without full row pulls
         agg = c.q(marts, f"""
             SELECT
                 {cond_sql} AS grp,
@@ -106,7 +115,8 @@ def run_segmentation(
         bb = int(m_b["bads"].sum())
         chi2, chi_p = chi2_2x2(na, ba, nb, bb)
 
-        # 2. Credit-score 20-pt histogram & score x LTV cells from SQL for KS and KL
+        # Measure credit-score KS and joint score x LTV symmetric KL divergence across candidate splits
+    # Summarizes distributional separation alongside 2x2 chi-squared tests in segmentation_mart
         score_hist = c.q(marts, f"""
             SELECT
                 FLOOR(COALESCE(s.credit_score, -20) / 20) * 20 AS bin_id,
@@ -217,7 +227,8 @@ def run_segmentation(
         """)
     c.write_df(marts, "interaction_pockets_mart", pockets_df, ["pocket_id"])
 
-    # Segment x year sufficiency grid against MIN_DATA_YEARS = 5
+    # Verify how many segments accumulate at least 5 calendar years of default history (Art 180)
+    # Writes segment_sufficiency_mart tracking annual exposure, defaults, and boolean compliance
     suff_df = c.q(marts, f"""
         WITH base AS (
             SELECT 'occupancy|purpose'::VARCHAR AS segment_scheme, segment AS segment_value, year(snapshot_date)::INTEGER AS snapshot_year,
@@ -244,12 +255,16 @@ def run_segmentation(
     return check.finish()
 
 
+# Parse CLI arguments for 10_segmentation
+# Uses module2_common.add_common_args()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Segmentation split tests and interaction pockets.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Open marts DB and evaluate pool homogeneity and 5-year history sufficiency marts
+# Verifies DB scope alignment, attaches source DB read-only, and executes run_segmentation()
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

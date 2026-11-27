@@ -394,7 +394,7 @@ class TestStageBToGFormulasAndPipeline(unittest.TestCase):
             for idx, ym in enumerate(yms):
                 rp_str = f"{ym[5:7]}{ym[:4]}"
                 # L1: defaults 2020-04 via N->Y mod with mod_non_interest_upb=1500 & forgiveness=200, stays clean -> cures!
-                raw_rows.append(("L1", rp_str, "S1", "4.0", "100000.00" if idx < 3 else "98000.00", str(idx), str(360 - idx), str(360 - idx),
+                raw_rows.append(("L1", rp_str, "S1", "4.0", f"{100000.0 - 500.0 * idx:.2f}", str(idx), str(360 - idx), str(360 - idx),
                                  "500.00", "00" if idx != 2 else "01", "N" if idx < 3 else "Y", None, None, None, "7", "7", None, None,
                                  "1500.00" if idx >= 3 else None, "200.00" if idx == 3 else None, None, None, None, None, None, None, None, None, None, None, None, None, None, None))
                 # L2: arrears default 2020-03 (dpd=3), exits '09' on 2020-05 with proceeds 60000 & costs 2000
@@ -423,8 +423,9 @@ class TestStageBToGFormulasAndPipeline(unittest.TestCase):
                 # L4: payoff '01' in 2021-06
                 if idx <= 17:
                     zbc4 = "01" if idx == 17 else None
-                    raw_rows.append(("L4", rp_str, "S1", "4.0", "120000.00" if idx < 17 else "0.00", str(12 + idx), "340", "340",
-                                     "118000.00" if zbc4 else "100.00", "00", "N", zbc4, rp_str if zbc4 else None, "118000.00" if zbc4 else None,
+                    l4_bal = f"{120000.0 - 100.0 * idx:.2f}"
+                    raw_rows.append(("L4", rp_str, "S1", "4.0", l4_bal if idx < 17 else "0.00", str(12 + idx), "340", "340",
+                                     l4_bal if zbc4 else "100.00", "00", "N", zbc4, rp_str if zbc4 else None, l4_bal if zbc4 else None,
                                      "7", "7", None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None))
                 # L5: clean performing benchmark all 36 months (with bounce 0->1->0 twice in 2020-2021)
                 dpd_5 = "01" if idx in (2, 5) else "00"

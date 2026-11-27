@@ -23,6 +23,8 @@ if str(SCRIPT_DIR) not in sys.path:
 import module2_common as c  # noqa: E402
 
 
+# Synthesize all finished Module 2 marts into the executive portfolio_findings.md report
+# Queries headline metrics across all six analytics stages and renders structured markdown tables
 def generate_findings(marts: object, out_md: Path, scope_label: str) -> int:
     """Assemble markdown findings document strictly from queried mart tables."""
     check = c.Checker("18_portfolio_findings: findings markdown generation")
@@ -33,7 +35,8 @@ def generate_findings(marts: object, out_md: Path, scope_label: str) -> int:
     add(f"Generated {date.today().isoformat()} from Module 2 marts (`{scope_label}` run).\n")
     add("Every figure below is queried directly from Module 2 mart tables.\n")
 
-    # 1. Stage A
+    # Query headline volume, audit reconciliation, and default count KPIs from Stage A marts
+    # Computes sample loan counts, maximum unexplained UPB discrepancy, and probation rates
     bf = c.q(marts, "SELECT * FROM balance_rollforward_mart ORDER BY reporting_period DESC LIMIT 1").iloc[0]
     add("\n## 1. Foundations (`00_build_monthly_core`, `01_data_audit`, `02_default_engine`)\n")
     add(f"- **Balance roll-forward (`balance_rollforward_mart`):** latest month `{str(bf['reporting_period'])[:10]}`, "
@@ -50,7 +53,8 @@ def generate_findings(marts: object, out_md: Path, scope_label: str) -> int:
     sens_txt = ", ".join(f"{r.treatment}: {int(r.ev_n):,}" for r in sens.itertuples())
     add(f"- **Default & probation (`default_events_mart`):** `{int(ev['ev_n']):,}` events across `{int(ev['loans_n']):,}` loans (`{sens_txt}`).\n")
 
-    # 2. Stage B
+    # Extract long-run average default rates, crisis peaks, Vasicek rho, and risk-driver IV rankings
+    # Pulls summary rows from default_rate_history_mart, implied_correlation_mart, and feature_iv_mart
     add("\n## 2. Arrears Transitions, Vintages, LTV and 12m History (`03` to `08`)\n")
     ev30 = c.q(marts, "SELECT * FROM roll_30day_evidence_mart ORDER BY horizon_window, first_arrears_band")
     add("- **IFRS 9 30-day backstop (`roll_30day_evidence_mart`, Wilson 95% CI):**\n")
@@ -77,13 +81,15 @@ def generate_findings(marts: object, out_md: Path, scope_label: str) -> int:
     add("- **PD sample scope (`sample_population_mart`):** " +
         ", ".join(f"{r.population_group}: {int(r.n):,}" for r in sp_tot.itertuples()) + ".\n")
 
-    # 3. Stage C
+    # Retrieve realized credit-exit loss severity, forced-sale discounts, and COVID relief volumes
+    # Queries default_outcomes_mart, forbearance_mart, and redefault_mart
     add("\n## 3. Risk Drivers & Segmentation (`09`, `10`)\n")
     top_iv = c.q(marts, "SELECT feature_name, avg(information_value) AS mean_iv FROM feature_iv_mart GROUP BY 1 ORDER BY 2 DESC LIMIT 6")
     add("- **Top features by mean IV across eras (`feature_iv_mart`):** " +
         ", ".join(f"`{r.feature_name}` ({r.mean_iv:.3f})" for r in top_iv.itertuples()) + ".\n")
 
-    # 4. Stage D
+    # Pull macro downturn severity, stress episode durations, and portfolio mix trend highlights
+    # Queries macro_downturn_mart, cycle_mart, and portfolio_mix_mart
     add("\n## 4. After Default & Relief (`11`, `12`)\n")
     do_sum = c.q(marts, """
         SELECT
@@ -116,7 +122,8 @@ def generate_findings(marts: object, out_md: Path, scope_label: str) -> int:
         note = " (coincides with 12m Art. 178(5A) modification probation)" if r.event_type == "modification" and r.initial_status_on_entry == "in_default" and int(r.horizon_months) == 12 else ""
         add(f"- Re-default `{r.event_type}` ({r.initial_status_on_entry}, `{int(r.horizon_months)}m`): `{r.rate:.2%}`{note}.\n")
 
-    # 5. Stage E & F
+    # Summarize IRB representativeness PSI scores, Category A/B limitations, and seasoning checks
+    # Queries representativeness_mart, data_limits_mart, and survivorship_mart
     add("\n## 5. Economy, Portfolio Mix & Data Fitness (`13` to `17`)\n")
     eco_top = c.q(marts, """
         SELECT series_name, rate_name, lag_months, pearson_corr
@@ -146,7 +153,8 @@ def generate_findings(marts: object, out_md: Path, scope_label: str) -> int:
     lim_cnt = int(c.scalar(marts, "SELECT count(*) FROM data_limits_mart") or 0)
     add(f"- **Category A/B MoC limits (`data_limits_mart`):** `{lim_cnt}` limits quantified.\n")
 
-    # 6. Handover table summary
+    # Assemble final markdown synthesis report containing executive tables and governance takeaways
+    # Writes UTF-8 output cleanly to the configured 18_portfolio_findings.md destination
     add("\n## 6. Modules 3 to 8 Mart Handover Register\n")
     add("| Module | Key marts / datasets consumed |\n|---|---|\n")
     add("| Module 3 (PD) | `default_events_mart`, `default_rate_history_mart`, `book_snapshot`, `book_snapshot_behavioural`, `risk_drivers_mart`, `segmentation_mart`, `representativeness_mart`, `data_limits_mart` |\n")
@@ -162,12 +170,16 @@ def generate_findings(marts: object, out_md: Path, scope_label: str) -> int:
     return check.finish()
 
 
+# Parse CLI flags including optional --output markdown path for 18_portfolio_findings
+# Extends standard Module 2 arguments with findings output override
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Write Module 2 findings report strictly from finished marts.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Open finished marts DB read-only and write sample or full executive portfolio findings report
+# Enforces scope match, picks output destination, calls generate_findings(), and closes cleanly
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

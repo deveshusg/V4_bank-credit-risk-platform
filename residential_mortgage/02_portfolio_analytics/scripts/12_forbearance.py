@@ -30,6 +30,8 @@ if str(SCRIPT_DIR) not in sys.path:
 import module2_common as c  # noqa: E402
 
 
+# Track monthly forbearance, payment deferral, and modification stock plus 12/24/36m re-defaults
+# Reads relief flags across core Parquets, pairs with default_events_mart, and checks keys
 def run_forbearance(
     marts: object,
     core_files: list[Path],
@@ -188,12 +190,16 @@ def run_forbearance(
     return check.finish()
 
 
+# Parse CLI arguments for 12_forbearance
+# Uses module2_common.add_common_args()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Modifications, forbearance plans and deferrals.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Connect to marts DB and generate forbearance_mart and redefault_mart
+# Verifies scope match, locates quarterly core files, executes run_forbearance(), and exits
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

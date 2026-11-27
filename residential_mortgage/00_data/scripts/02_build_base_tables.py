@@ -62,6 +62,8 @@ PERIOD = "try_strptime(reporting_period, '%m%Y')::DATE"
 # SECTION 1: TERMINAL UI & FORMATTING
 # =======================================================================================
 
+# Format a raw byte count into readable KB, MB, or GB text
+# Divides repeatedly by 1024 until the magnitude drops below the next unit tier
 def format_bytes(num_bytes: float) -> str:
     """Format byte count into human-readable text."""
     for unit in ["B", "KB", "MB", "GB", "TB"]:
@@ -71,6 +73,8 @@ def format_bytes(num_bytes: float) -> str:
     return f"{num_bytes:.2f} PB"
 
 
+# Format elapsed execution time into concise seconds, minutes, or h/m/s text
+# Decomposes elapsed seconds into integer hour, minute, and remainder buckets
 def format_seconds(seconds: float) -> str:
     """Format elapsed seconds into MMm SSs or HHh MMm SSs."""
     seconds = int(max(0, seconds))
@@ -81,6 +85,8 @@ def format_seconds(seconds: float) -> str:
     return f"{m:02d}m {s:02d}s"
 
 
+# Write an updating progress status onto the current terminal line without newline scroll
+# Pads trailing spaces to overwrite prior output and flushes immediately
 def print_in_place(line: str):
     """Print an updating line in place if in an interactive terminal."""
     if not sys.stdout.isatty():
@@ -91,6 +97,8 @@ def print_in_place(line: str):
     sys.stdout.flush()
 
 
+# Finalize an in-place status message by printing a permanent terminal line
+# Clears residual characters on the line and appends a newline
 def print_final(line: str):
     """Print a completed line and advance cursor."""
     if sys.stdout.isatty():
@@ -106,16 +114,22 @@ def print_final(line: str):
 # SECTION 2: DUCKDB SCHEMA, VIEWS & LOGIC
 # =======================================================================================
 
+# Execute a SQL query expected to return a single scalar value
+# Fetches the first tuple element from con.execute(sql, params).fetchone()
 def scalar(con, sql: str, params=None):
     """Run a query and return a single scalar value."""
     return con.execute(sql, params or []).fetchone()[0]
 
 
+# Wrap a Parquet string column expression so blanks become clean trimmed SQL NULLs
+# Applies nullif(trim(expr), '') in SQL for uniform missing-value handling
 def sql_text(value) -> str:
     """Escape text for SQL literal."""
     return "'" + str(value).replace("'", "''") + "'"
 
 
+# Generate the DuckDB TRY_CAST or date-parsing SQL expression for one layout Field
+# Routes VARCHAR, INTEGER, BIGINT, DECIMAL, BOOLEAN, YYYYMM, and MM/YYYY formats accurately
 def convert(field) -> str:
     """Generate SQL expression to convert raw string to target type."""
     if field.dtype == "text":
@@ -125,11 +139,15 @@ def convert(field) -> str:
     return f"TRY_CAST({field.column} AS {SQL_TYPES[field.dtype]})"
 
 
+# Collect all Fannie Mae layout columns destined for the static loans_table
+# Concatenates 'loans' (latest-value) and 'loans_first' (earliest-value) fields in order
 def loans_fields():
     """Return all fields destined for loans_table."""
     return [f for f in FIELDS if f.target in ("loans", "loans_first")]
 
 
+# Validate and parse an acquisition quarter string into (year, q, canonical_label)
+# Matches YYYYQn regex cleanly or terminates via sys.exit() with clear error guidance
 def parse_quarter(text: str) -> tuple[int, int, str]:
     """Parse and validate quarter string (e.g. 2005Q1)."""
     cleaned = text.strip().upper().replace("-", "")
@@ -140,6 +158,8 @@ def parse_quarter(text: str) -> tuple[int, int, str]:
     return year, q, f"{year}Q{q}"
 
 
+# Initialize physical DuckDB tables (loans_table, audit ledger, restatements) and monthly view
+# Executes CREATE TABLE IF NOT EXISTS statements derived from field_map and refreshes view
 def init_database(con, parquet_dir: Path):
     """Create master tables if missing and update loan_monthly_view."""
     # 1. Physical loans_table
@@ -168,6 +188,8 @@ def init_database(con, parquet_dir: Path):
     update_loan_monthly_view(con, parquet_dir)
 
 
+# Rebuild loan_monthly_view over ONLY the quarters currently committed in loaded_quarters_table
+# Generates typed SELECT expressions unioning existing Parquet files with acquisition_quarter tag
 def update_loan_monthly_view(con, parquet_dir: Path):
     """Rebuild loan_monthly_view over Parquet files in loaded_quarters_table.
 
@@ -217,6 +239,8 @@ def update_loan_monthly_view(con, parquet_dir: Path):
     con.execute(view_sql)
 
 
+# Insert one row per loan into loans_table for a single acquisition quarter
+# Takes latest non-blank values per D-017 via arg_max, except seller_name and msa via arg_min
 def load_quarter_loans(con, quarter: str, parquet_file: Path) -> int:
     """Materialize unique loan records into loans_table from raw Parquet."""
     p_path = str(parquet_file).replace("\\", "/")
@@ -247,6 +271,8 @@ def load_quarter_loans(con, quarter: str, parquet_file: Path) -> int:
     return scalar(con, "SELECT count(*) FROM loans_table WHERE acquisition_quarter = ?", [quarter])
 
 
+# Measure how many loans restated each static origination attribute across monthly snapshots
+# Counts distinct non-blank values > 1 per loan_id for every 'loans' target field
 def record_restatements(con, quarter: str, parquet_file: Path) -> dict:
     """Count how many loans had restated origination fields across months."""
     p_path = str(parquet_file).replace("\\", "/")
@@ -263,6 +289,8 @@ def record_restatements(con, quarter: str, parquet_file: Path) -> dict:
     return restated
 
 
+# Execute all 7 structural, UPB reconciliation, key, cast, and enum checks before commit
+# Verifies row parity, A + R + B = loaded_total cent-exact equality, key integrity, and ranges
 def run_checks(
     con,
     quarter: str,
@@ -389,6 +417,8 @@ def run_checks(
     return results, reconcile_info
 
 
+# Prepend a markdown summary block for the newly loaded quarter to data_log.md
+# Rebuilds active-cohort header, preserves prior entries, and writes newest quarter first
 def write_data_log(
     data_log_path: Path,
     quarter: str,
@@ -454,6 +484,8 @@ def write_data_log(
     data_log_path.write_text(new_text.strip() + "\n", encoding="utf-8")
 
 
+# Run single-quarter load, restatement tracking, and 7-point validation inside an atomic transaction
+# Rolls back cleanly if any check fails, or commits and logs results to data_log.md
 def process_quarter(con, quarter: str, parquet_file: Path, db_is_default: bool) -> bool:
     """Load one quarter into loans_table, draw sample, run checks, and commit in one transaction."""
     already_loaded = scalar(con, "SELECT count(*) FROM loaded_quarters_table WHERE quarter = ?", [quarter])
@@ -464,7 +496,8 @@ def process_quarter(con, quarter: str, parquet_file: Path, db_is_default: bool) 
     q_start = time.perf_counter()
     print(f"\n[{quarter}] START: Building Base Tables from Parquet...")
 
-    # Load conversion record if available
+    # Read per-quarter ZIP/CSV conversion provenance metadata if present on disk
+    # Opens <quarter>.conversion.json cleanly and falls back to None if missing or corrupt
     conv_file = parquet_file.with_name(f"{quarter}.conversion.json")
     conv_data = None
     if conv_file.exists():
@@ -476,17 +509,20 @@ def process_quarter(con, quarter: str, parquet_file: Path, db_is_default: bool) 
 
     con.execute("BEGIN TRANSACTION")
     try:
-        # Step 1: Scan and materialize loans_table
+        # Extract latest static origination attributes for all loans in the quarter
+        # Runs DuckDB aggregation per loan_id and inserts sorted rows into loans_table
         print_in_place(f"  ... [{quarter}] 1/3 Materializing loans_table...")
         loans_loaded = load_quarter_loans(con, quarter, parquet_file)
         print_final(f"  OK [{quarter}] 1/3 Materialized loans_table: {loans_loaded:,} loans")
 
-        # Step 2: Track restatements
+        # Record how many loans saw origination fields restated across monthly reports
+        # Counts distinct non-blank values > 1 per field into origination_restatements_table
         print_in_place(f"  ... [{quarter}] 2/3 Tracking origination restatements...")
         restated = record_restatements(con, quarter, parquet_file)
         print_final(f"  OK [{quarter}] 2/3 Restated fields tracked: {len(restated)}")
 
-        # Step 3: Run checks
+        # Execute all seven structural, cent-exact UPB, key, and domain checks before commit
+        # Raises ValueError to force transaction rollback if any single assertion fails
         print_in_place(f"  ... [{quarter}] 3/3 Running 7 structural validation checks...")
         checks, info = run_checks(con, quarter, parquet_file, conv_data, loans_loaded)
 
@@ -494,7 +530,8 @@ def process_quarter(con, quarter: str, parquet_file: Path, db_is_default: bool) 
             if actual != expected:
                 raise ValueError(f"CHECK {check_num} FAILED ({title}): actual {actual} != expected {expected}")
 
-        # Ledger record
+        # Record timing, volume, and UPB reconciliation totals in the persistent audit ledger
+        # Inserts one immutable provenance row into loaded_quarters_table prior to COMMIT
         raw_csv_bytes = conv_data.get("raw_csv_bytes", 0) if conv_data else 0
         raw_lines = conv_data.get("raw_lines", 0) if conv_data else 0
         parquet_bytes = parquet_file.stat().st_size
@@ -577,6 +614,8 @@ def process_quarter(con, quarter: str, parquet_file: Path, db_is_default: bool) 
 # SECTION 3: CLI & ORCHESTRATION
 # =======================================================================================
 
+# Scan the raw Parquet folder and return available YYYYQn cohorts in chronological order
+# Filters *.parquet filenames against YYYYQn regex and sorts by numeric (year, quarter)
 def list_available_parquet_quarters(parquet_dir: Path) -> list[str]:
     """Find all valid YYYYQn.parquet files in the parquet directory."""
     pattern = re.compile(r"^(\d{4})Q([1-4])\.parquet$", re.IGNORECASE)
@@ -590,6 +629,8 @@ def list_available_parquet_quarters(parquet_dir: Path) -> list[str]:
     return [q[2] for q in quarters]
 
 
+# Resolve CLI flags or positional arguments into the exact ordered quarter queue
+# Supports single quarter, --from/--to range, positional endpoints, or all available cohorts
 def build_quarter_list(args, available_quarters: list[str]) -> list[str]:
     """Resolve CLI arguments into an ordered list of quarters to process."""
     if args.all or (args.target and args.target[0].lower() == "all"):
@@ -638,6 +679,8 @@ def build_quarter_list(args, available_quarters: list[str]) -> list[str]:
     )
 
 
+# Open target mortgages.duckdb, initialize tables, process queued quarters, and refresh views
+# Calls init_database, loops process_quarter cleanly, updates loan_monthly_view, and closes DB
 def main():
     parser = argparse.ArgumentParser(
         description="Build DuckDB loans_table and monthly views from raw Parquet files."

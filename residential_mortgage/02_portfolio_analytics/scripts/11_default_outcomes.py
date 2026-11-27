@@ -35,6 +35,8 @@ import module2_common as c  # noqa: E402
 ltv_mod = __import__("06_current_ltv")
 
 
+# Compute realized workout net losses, forced-sale discounts, and upper-left loss development triangle
+# Reconciles credit exits against workout cashflows/HPI values and asserts exact UPB conservation
 def run_default_outcomes(
     marts: object,
     src_prefix: str,
@@ -233,7 +235,8 @@ def run_default_outcomes(
         if idx % 20 == 0 or idx == len(core_files):
             print(f"  [{idx:3d}/{len(core_files)}] resolved outcomes {quarter} ({time.time() - t0:.1f}s)", flush=True)
 
-    # Observable upper-left loss development triangle (0..119, '120+', strictly observable <= dataset_end)
+    # Construct the cumulative UPB loss-development triangle constrained to observable calendar cells
+    # Buckets resolved net losses/UPB by lag while proving unresolved + resolved == cohort UPB
     marts.execute(f"""
         CREATE OR REPLACE TABLE loss_development_mart AS
         WITH cohort_tot AS (
@@ -292,7 +295,8 @@ def run_default_outcomes(
         ORDER BY default_year, lag_sort
     """)
 
-    # Summary mart across era x state_group x ltv_band
+    # Aggregate event outcomes, LGD totals, forced-sale discounts, and forgiveness by era/state/LTV
+    # Materializes compact recovery_summary_mart for downstream findings and severity charts
     c.write_mart(
         marts,
         "recovery_summary_mart",
@@ -321,7 +325,8 @@ def run_default_outcomes(
         ["era", "state_group", "ltv_band"],
     )
 
-    # Chart (300 dpi): Credit-exit severity vs LTV at default band
+    # Plot UPB-weighted realized net loss severity across indexed LTV bands at default
+    # Orders LTV bands cleanly and writes 300 dpi chart via module2_common.save_chart()
     sev_df = c.q(marts, """
         SELECT ltv_band,
                sum(credit_exit_net_loss) / NULLIF(sum(credit_exit_default_upb), 0.0) * 100.0 AS sev_pct
@@ -352,12 +357,16 @@ def run_default_outcomes(
     return check.finish()
 
 
+# Parse CLI arguments for 11_default_outcomes
+# Uses module2_common.add_common_args()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Default outcomes, economic net loss and development triangle.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Run post-default workout loss severity, FSD, and loss-development triangle pipeline
+# Validates DB scope alignment, attaches source DB, executes run_default_outcomes(), and exits
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

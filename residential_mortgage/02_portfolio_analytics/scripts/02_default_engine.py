@@ -31,6 +31,8 @@ if str(SCRIPT_DIR) not in sys.path:
 import module2_common as c  # noqa: E402
 
 
+# Run the CRR Article 178 monthly regulatory default and probation state machine on one loan
+# Detects 90+ DPD, distress restructuring, and credit-exit triggers with 3m/12m cure probation
 def run_loan_records(
     months: Sequence[str],
     mb: Sequence[int | None],
@@ -182,6 +184,8 @@ def run_loan_records(
     return events
 
 
+# Convenience adapter executing the default state machine directly from a sorted DataFrame
+# Extracts native tuples from DataFrame columns and delegates to run_loan_records()
 def run_loan_df(g: pd.DataFrame, apply_covid_hold: bool = True) -> list[dict]:
     """Adapt sorted single-loan DataFrame slice to run_loan_records."""
     return run_loan_records(
@@ -201,6 +205,8 @@ def run_loan_df(g: pd.DataFrame, apply_covid_hold: bool = True) -> list[dict]:
     )
 
 
+# Create empty default_events_mart and default_status_monthly schemas in the marts DB
+# Replaces both destination tables cleanly before batch cohort insertion
 def init_default_tables(marts: object) -> None:
     """Create empty target tables for incremental per-quarter insertion."""
     marts.execute("""
@@ -223,6 +229,8 @@ def init_default_tables(marts: object) -> None:
     """)
 
 
+# Execute regulatory default state machine across all quarterly core files and write marts
+# Streams loans per cohort, builds COVID vs raw sensitivity table, and verifies 8 integrity checks
 def run_default_engine(
     marts: object,
     src_prefix: str,
@@ -313,7 +321,8 @@ def run_default_engine(
                 flush=True,
             )
 
-    # Expand default_events_mart -> default_status_monthly completely in DuckDB SQL
+    # Expand every default spell into monthly in_default indicators directly inside DuckDB
+    # Generates inclusive monthly series between default_month and end_month via generate_series SQL
     marts.execute("""
         CREATE OR REPLACE TABLE default_status_monthly AS
         SELECT
@@ -338,7 +347,8 @@ def run_default_engine(
         sdf = pd.DataFrame(columns=["treatment", "year", "trigger_type", "events", "balance_at_default"])
     c.write_df(marts, "default_sensitivity_mart", sdf, ["treatment", "year", "trigger_type"])
 
-    # Validation checks in DuckDB SQL
+    # Run structural and regulatory consistency checks across both default marts and sensitivity
+    # Enforces missing end_reason, cure date alignment, zero overlaps, and >=12m Art 178(5A) probation
     missing_reason = int(c.scalar(marts, "SELECT count(*) FROM default_events_mart WHERE end_reason IS NULL") or 0)
     bad_cure = int(
         c.scalar(
@@ -397,12 +407,16 @@ def run_default_engine(
     return check.finish()
 
 
+# Parse CLI arguments for 02_default_engine
+# Uses module2_common.add_common_args()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Regulatory default definition and probation state machine.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Connect to sample or --full marts DB and execute the regulatory default engine
+# Validates scope parity, attaches source DB read-only, runs engine, and exits with check status
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)

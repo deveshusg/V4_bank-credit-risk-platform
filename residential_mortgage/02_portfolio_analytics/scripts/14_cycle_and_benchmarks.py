@@ -29,6 +29,8 @@ if str(SCRIPT_DIR) not in sys.path:
 import module2_common as c  # noqa: E402
 
 
+# Detect stress episodes above mean + 1 SD, compute calendar-month seasonality, and build APC hazard mart
+# Analyzes quarterly rate volatility, monthly hazard multipliers, and vintage x age matrices
 def run_cycle_and_benchmarks(marts: object, core_files: list[Path]) -> int:
     """Compute cycle duration, recovery half-life, 1m seasonality, and descriptive APC."""
     t0 = time.time()
@@ -182,12 +184,16 @@ def run_cycle_and_benchmarks(marts: object, core_files: list[Path]) -> int:
     return check.finish()
 
 
+# Parse CLI arguments for 14_cycle_and_benchmarks
+# Uses module2_common.add_common_args()
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Downturn cycles, 1m seasonality and APC table.")
     c.add_common_args(parser)
     return parser.parse_args()
 
 
+# Connect to marts DB and build cycle_mart, seasonality_mart, and apc_mart
+# Validates scope parity and runs cycle/seasonality benchmark verification checks
 def main() -> int:
     args = c.resolve_paths(parse_args())
     marts = c.connect(args.marts, read_only=False)
